@@ -10,12 +10,12 @@ pub mod monitoring;
 pub mod overview;
 pub mod traces;
 
+use self::health::AppState;
 use axum::{
     routing::{get, patch, post, put},
     Router,
 };
 use std::sync::Arc;
-use self::health::AppState;
 
 pub fn build_router(state: Arc<AppState>) -> Router {
     let api_routes = Router::new()
@@ -25,7 +25,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Overview
         .route("/overview/stats", get(overview::get_overview_stats))
         // Models
-        .route("/models", get(models::list_models).post(models::create_model))
+        .route(
+            "/models",
+            get(models::list_models).post(models::create_model),
+        )
         .route("/models/:id", get(models::get_model))
         .route("/models/:id/stage", patch(models::update_stage))
         // Experiments
@@ -33,7 +36,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/experiments",
             get(experiments::list_experiments).post(experiments::create_experiment),
         )
-        .route("/experiments/compare", get(experiments::compare_experiments))
+        .route(
+            "/experiments/compare",
+            get(experiments::compare_experiments),
+        )
         // Evaluations
         .route(
             "/evaluations",
@@ -54,7 +60,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             get(monitoring::get_latency_distribution),
         )
         // Traces
-        .route("/traces", get(traces::list_traces).post(traces::create_trace))
+        .route(
+            "/traces",
+            get(traces::list_traces).post(traces::create_trace),
+        )
         .route("/traces/:id", get(traces::get_trace))
         // Costs & Pricing
         .route("/costs/summary", get(costs::get_cost_summary))
@@ -62,13 +71,19 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/costs/budget", patch(costs::update_budget))
         // Deployments
         .route("/deployments", get(deployments::list_deployments))
-        .route("/deployments/:id/restart", post(deployments::restart_deployment))
+        .route(
+            "/deployments/:id/restart",
+            post(deployments::restart_deployment),
+        )
         // CI/CD Pipelines
         .route("/cicd/workflows", get(cicd::list_workflows))
         .route("/cicd/workflows/trigger", post(cicd::trigger_workflow))
         // Integrations
         .route("/integrations", get(integrations::list_integrations))
-        .route("/integrations/:name/test", post(integrations::test_integration))
+        .route(
+            "/integrations/:name/test",
+            post(integrations::test_integration),
+        )
         .route("/integrations/:name", put(integrations::update_integration))
         .with_state(state.clone());
 

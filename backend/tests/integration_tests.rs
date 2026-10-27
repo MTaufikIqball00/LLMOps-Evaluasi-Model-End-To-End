@@ -10,15 +10,28 @@ fn test_ragas_evaluation_scoring() {
 
     let res = evaluate_sample(question, Some(ground_truth), faithful_answer, Some(context));
 
-    assert!(res.faithfulness > 0.70, "Faithful answer score must exceed 0.70");
-    assert!(res.relevance > 0.60, "Relevant answer score must exceed 0.60");
-    assert!(!res.hallucination_detected, "No hallucination should be flagged for faithful response");
-    assert!(res.hallucination_score < 0.35, "Hallucination score must be below 0.35 threshold");
+    assert!(
+        res.faithfulness > 0.70,
+        "Faithful answer score must exceed 0.70"
+    );
+    assert!(
+        res.relevance > 0.60,
+        "Relevant answer score must exceed 0.60"
+    );
+    assert!(
+        !res.hallucination_detected,
+        "No hallucination should be flagged for faithful response"
+    );
+    assert!(
+        res.hallucination_score < 0.35,
+        "Hallucination score must be below 0.35 threshold"
+    );
 }
 
 #[test]
 fn test_secret_redaction() {
-    let raw = "Client connected with sk-1234567890abcdef1234567890 and token ghp_99887766554433221100aa.";
+    let raw =
+        "Client connected with sk-1234567890abcdef1234567890 and token ghp_99887766554433221100aa.";
     let sanitized = redact_secrets(raw);
 
     assert!(!sanitized.contains("sk-1234567890abcdef1234567890"));

@@ -46,3 +46,9 @@ impl IntegrationHub {
         ]
     }
 }
+
+impl Default for IntegrationHub {
+    fn default() -> Self {
+        Self::new()
+    }
+}

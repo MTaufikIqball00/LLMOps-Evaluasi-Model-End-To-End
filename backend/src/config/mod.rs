@@ -30,27 +30,27 @@ impl AppConfig {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "sqlite://data/llmops.db?mode=rwc".to_string());
 
-        let frontend_origin = env::var("FRONTEND_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:3210".to_string());
+        let frontend_origin =
+            env::var("FRONTEND_ORIGIN").unwrap_or_else(|_| "http://localhost:3210".to_string());
 
-        let mlflow_url = env::var("MLFLOW_TRACKING_URI")
-            .unwrap_or_else(|_| "http://localhost:5500".to_string());
+        let mlflow_url =
+            env::var("MLFLOW_TRACKING_URI").unwrap_or_else(|_| "http://localhost:5500".to_string());
 
         let wandb_api_key = env::var("WANDB_API_KEY").ok().filter(|s| !s.is_empty());
 
-        let prometheus_url = env::var("PROMETHEUS_URL")
-            .unwrap_or_else(|_| "http://localhost:9190".to_string());
+        let prometheus_url =
+            env::var("PROMETHEUS_URL").unwrap_or_else(|_| "http://localhost:9190".to_string());
 
-        let grafana_url = env::var("GRAFANA_URL")
-            .unwrap_or_else(|_| "http://localhost:3310".to_string());
+        let grafana_url =
+            env::var("GRAFANA_URL").unwrap_or_else(|_| "http://localhost:3310".to_string());
 
         let kubernetes_in_cluster = env::var("KUBERNETES_IN_CLUSTER")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 
         let github_token = env::var("GITHUB_TOKEN").ok().filter(|s| !s.is_empty());
-        let github_repo = env::var("GITHUB_REPO")
-            .unwrap_or_else(|_| "enterprise/llmops-platform".to_string());
+        let github_repo =
+            env::var("GITHUB_REPO").unwrap_or_else(|_| "enterprise/llmops-platform".to_string());
 
         let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
 

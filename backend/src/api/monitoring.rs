@@ -1,8 +1,8 @@
+use crate::api::health::AppState;
+use crate::errors::AppError;
 use axum::{extract::State, Json};
 use serde::Serialize;
 use std::sync::Arc;
-use crate::api::health::AppState;
-use crate::errors::AppError;
 
 #[derive(Serialize)]
 pub struct MonitoringTimeseries {
@@ -81,20 +81,25 @@ pub async fn get_latency_distribution(
         .await
         .unwrap_or((0,));
 
-    let b2: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 150.0 AND latency_ms < 300.0")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0,));
+    let b2: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 150.0 AND latency_ms < 300.0",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0,));
 
-    let b3: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 300.0 AND latency_ms < 500.0")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0,));
+    let b3: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 300.0 AND latency_ms < 500.0",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0,));
 
-    let b4: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 500.0")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0,));
+    let b4: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM request_traces WHERE latency_ms >= 500.0")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((0,));
 
     let make_bucket = |label: &str, count: i64| LatencyBucket {
         range_label: label.to_string(),

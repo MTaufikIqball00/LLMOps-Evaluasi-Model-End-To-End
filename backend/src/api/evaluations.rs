@@ -1,3 +1,7 @@
+use crate::api::health::AppState;
+use crate::domain::{CreateEvaluationRequest, Evaluation, EvaluationTestCase};
+use crate::errors::AppError;
+use crate::evaluation::run_evaluation_job;
 use axum::{
     extract::{Path, State},
     Json,
@@ -5,10 +9,6 @@ use axum::{
 use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::api::health::AppState;
-use crate::domain::{CreateEvaluationRequest, Evaluation, EvaluationTestCase};
-use crate::errors::AppError;
-use crate::evaluation::run_evaluation_job;
 
 #[derive(Serialize)]
 pub struct EvaluationDetail {
@@ -28,9 +28,10 @@ pub struct MetricDefinition {
 pub async fn list_evaluations(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Evaluation>>, AppError> {
-    let evals: Vec<Evaluation> = sqlx::query_as("SELECT * FROM evaluations ORDER BY created_at DESC")
-        .fetch_all(&state.pool)
-        .await?;
+    let evals: Vec<Evaluation> =
+        sqlx::query_as("SELECT * FROM evaluations ORDER BY created_at DESC")
+            .fetch_all(&state.pool)
+            .await?;
     Ok(Json(evals))
 }
 
@@ -43,7 +44,8 @@ pub async fn get_evaluation_detail(
         .fetch_optional(&state.pool)
         .await?;
 
-    let evaluation = eval.ok_or_else(|| AppError::NotFound(format!("Evaluation '{id}' not found")))?;
+    let evaluation =
+        eval.ok_or_else(|| AppError::NotFound(format!("Evaluation '{id}' not found")))?;
 
     let test_cases: Vec<EvaluationTestCase> = sqlx::query_as(
         "SELECT * FROM evaluation_test_cases WHERE evaluation_id = ? ORDER BY created_at ASC",
@@ -62,7 +64,14 @@ pub async fn trigger_evaluation(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateEvaluationRequest>,
 ) -> Result<Json<Evaluation>, AppError> {
-    let id = format!("eval-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
+    let id = format!(
+        "eval-{}",
+        Uuid::new_v4()
+            .to_string()
+            .chars()
+            .take(8)
+            .collect::<String>()
+    );
 
     sqlx::query(
         r#"

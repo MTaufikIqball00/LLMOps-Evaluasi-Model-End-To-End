@@ -1,3 +1,6 @@
+use crate::api::health::AppState;
+use crate::domain::{CreateExperimentRequest, Experiment};
+use crate::errors::AppError;
 use axum::{
     extract::{Query, State},
     Json,
@@ -5,9 +8,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::api::health::AppState;
-use crate::domain::{CreateExperimentRequest, Experiment};
-use crate::errors::AppError;
 
 #[derive(Deserialize)]
 pub struct ExperimentListQuery {
@@ -51,10 +51,20 @@ pub async fn create_experiment(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateExperimentRequest>,
 ) -> Result<Json<Experiment>, AppError> {
-    let id = format!("exp-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
-    let params_str = serde_json::to_string(&payload.parameters).unwrap_or_else(|_| "{}".to_string());
+    let id = format!(
+        "exp-{}",
+        Uuid::new_v4()
+            .to_string()
+            .chars()
+            .take(8)
+            .collect::<String>()
+    );
+    let params_str =
+        serde_json::to_string(&payload.parameters).unwrap_or_else(|_| "{}".to_string());
     let metrics_str = serde_json::to_string(&payload.metrics).unwrap_or_else(|_| "{}".to_string());
-    let tags_str = payload.tags.map(|t| serde_json::to_string(&t).unwrap_or_default());
+    let tags_str = payload
+        .tags
+        .map(|t| serde_json::to_string(&t).unwrap_or_default());
     let duration = payload.duration_seconds.unwrap_or(0);
 
     sqlx::query(
@@ -100,19 +110,15 @@ pub async fn compare_experiments(
             .fetch_all(&state.pool)
             .await?
     } else {
-        let mut placeholders = Vec::new();
-        for _ in &runs_list {
-            placeholders.push("?");
-        }
-        let sql = format!(
-            "SELECT * FROM experiments WHERE id IN ({})",
-            placeholders.join(",")
-        );
-        let mut q = sqlx::query_as::<_, Experiment>(&sql);
+        let mut qb = sqlx::QueryBuilder::new("SELECT * FROM experiments WHERE id IN (");
+        let mut separated = qb.separated(", ");
         for id in &runs_list {
-            q = q.bind(id);
+            separated.push_bind(id);
         }
-        q.fetch_all(&state.pool).await?
+        separated.push_unseparated(")");
+        qb.build_query_as::<Experiment>()
+            .fetch_all(&state.pool)
+            .await?
     };
 
     let mut param_keys = std::collections::BTreeSet::new();

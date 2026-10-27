@@ -28,7 +28,10 @@ pub async fn check_status(client: &Client, grafana_url: &str) -> IntegrationStat
             status: "Disconnected / Standalone".to_string(),
             endpoint_url: Some(grafana_url.to_string()),
             latency_ms: None,
-            message: format!("Grafana instance not detected on {}. Using built-in telemetry UI.", grafana_url),
+            message: format!(
+                "Grafana instance not detected on {}. Using built-in telemetry UI.",
+                grafana_url
+            ),
             is_configured: true,
             last_checked: Some(chrono::Utc::now().to_rfc3339()),
         },

@@ -56,9 +56,20 @@ pub async fn run_evaluation_job(
                 tc.retrieved_context.as_deref(),
             );
 
-            let case_id = format!("tc-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
+            let case_id = format!(
+                "tc-{}",
+                Uuid::new_v4()
+                    .to_string()
+                    .chars()
+                    .take(8)
+                    .collect::<String>()
+            );
             let simulated_latency = 210.0 + (tc.generated_answer.len() as f64 * 0.4);
-            let simulated_tokens = (tc.question.len() + tc.generated_answer.len() + tc.retrieved_context.as_ref().map(|c| c.len()).unwrap_or(0)) as i64 / 4;
+            let simulated_tokens = (tc.question.len()
+                + tc.generated_answer.len()
+                + tc.retrieved_context.as_ref().map(|c| c.len()).unwrap_or(0))
+                as i64
+                / 4;
 
             total_faithfulness += res.faithfulness;
             total_relevance += res.relevance;
@@ -78,7 +89,7 @@ pub async fn run_evaluation_job(
                     faithfulness_score, relevance_score, groundedness_score, hallucination_detected,
                     latency_ms, tokens_used, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                "#
+                "#,
             )
             .bind(&case_id)
             .bind(&eval_id)
@@ -122,7 +133,7 @@ pub async fn run_evaluation_job(
                 total_tokens = ?,
                 test_cases_count = ?
             WHERE id = ?
-            "#
+            "#,
         )
         .bind(avg_faithfulness)
         .bind(avg_relevance)

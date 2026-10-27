@@ -5,7 +5,7 @@ use std::env;
 pub async fn check_status(_client: &Client) -> IntegrationStatusReport {
     let api_key = env::var("WANDB_API_KEY").ok().filter(|s| !s.is_empty());
 
-    if let Some(_) = api_key {
+    if api_key.is_some() {
         IntegrationStatusReport {
             service_name: "wandb".to_string(),
             display_name: "Weights & Biases".to_string(),

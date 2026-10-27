@@ -1,3 +1,6 @@
+use crate::api::health::AppState;
+use crate::domain::{CreateModelRequest, Model, UpdateStageRequest};
+use crate::errors::AppError;
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -5,9 +8,6 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::api::health::AppState;
-use crate::domain::{CreateModelRequest, Model, UpdateStageRequest};
-use crate::errors::AppError;
 
 #[derive(Deserialize)]
 pub struct ModelListQuery {
@@ -52,9 +52,18 @@ pub async fn create_model(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateModelRequest>,
 ) -> Result<Json<Model>, AppError> {
-    let id = format!("m-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
+    let id = format!(
+        "m-{}",
+        Uuid::new_v4()
+            .to_string()
+            .chars()
+            .take(8)
+            .collect::<String>()
+    );
     let stage = payload.stage.unwrap_or_else(|| "Development".to_string());
-    let tags_json = payload.tags.map(|t| serde_json::to_string(&t).unwrap_or_default());
+    let tags_json = payload
+        .tags
+        .map(|t| serde_json::to_string(&t).unwrap_or_default());
 
     sqlx::query(
         r#"
@@ -62,7 +71,7 @@ pub async fn create_model(
             id, name, framework, task, stage, version, parameters_count,
             artifact_uri, description, tags, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        "#
+        "#,
     )
     .bind(&id)
     .bind(&payload.name)
@@ -98,14 +107,13 @@ pub async fn update_stage(
         )));
     }
 
-    let rows_affected = sqlx::query(
-        "UPDATE models SET stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-    )
-    .bind(&payload.stage)
-    .bind(&id)
-    .execute(&state.pool)
-    .await?
-    .rows_affected();
+    let rows_affected =
+        sqlx::query("UPDATE models SET stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(&payload.stage)
+            .bind(&id)
+            .execute(&state.pool)
+            .await?
+            .rows_affected();
 
     if rows_affected == 0 {
         return Err(AppError::NotFound(format!("Model '{id}' not found")));

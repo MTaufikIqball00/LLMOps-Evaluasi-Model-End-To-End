@@ -1,3 +1,5 @@
+use crate::observability::format_prometheus_metrics;
+use crate::persistence::DbPool;
 use axum::{
     extract::State,
     response::{IntoResponse, Response},
@@ -5,8 +7,6 @@ use axum::{
 };
 use serde::Serialize;
 use std::time::Instant;
-use crate::observability::format_prometheus_metrics;
-use crate::persistence::DbPool;
 
 #[derive(Serialize)]
 pub struct HealthStatus {
@@ -68,20 +68,23 @@ pub async fn prometheus_metrics(State(state): State<std::sync::Arc<AppState>>) -
         .await
         .unwrap_or((0,));
 
-    let token_sum: (i64,) = sqlx::query_as("SELECT COALESCE(SUM(total_tokens), 0) FROM request_traces")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0,));
+    let token_sum: (i64,) =
+        sqlx::query_as("SELECT COALESCE(SUM(total_tokens), 0) FROM request_traces")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((0,));
 
-    let avg_faith: (f64,) = sqlx::query_as("SELECT COALESCE(AVG(faithfulness), 0.94) FROM evaluations")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0.94,));
+    let avg_faith: (f64,) =
+        sqlx::query_as("SELECT COALESCE(AVG(faithfulness), 0.94) FROM evaluations")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((0.94,));
 
-    let active_deps: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM deployments WHERE status = 'Healthy'")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0,));
+    let active_deps: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM deployments WHERE status = 'Healthy'")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((0,));
 
     let metrics_text = format_prometheus_metrics(
         total_traces.0,

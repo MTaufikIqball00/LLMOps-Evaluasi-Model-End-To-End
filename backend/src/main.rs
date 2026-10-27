@@ -65,9 +65,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("========================================================");
     info!("   LLMOPS CONTROL CENTER — RUST BACKEND OPERATIONAL     ");
     info!("========================================================");
-    info!(" API Server:         http://localhost:{}", config.server_port);
-    info!(" Health Endpoint:    http://localhost:{}/api/v1/health", config.server_port);
-    info!(" Prometheus Metrics: http://localhost:{}/api/v1/metrics", config.server_port);
+    info!(
+        " API Server:         http://localhost:{}",
+        config.server_port
+    );
+    info!(
+        " Health Endpoint:    http://localhost:{}/api/v1/health",
+        config.server_port
+    );
+    info!(
+        " Prometheus Metrics: http://localhost:{}/api/v1/metrics",
+        config.server_port
+    );
     info!(" Target Frontend:    {}", config.frontend_origin);
     info!(" Database:           {}", config.database_url);
     info!(" Environment:        {}", config.app_env);

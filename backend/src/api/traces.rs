@@ -1,3 +1,7 @@
+use crate::api::health::AppState;
+use crate::domain::{CreateTraceRequest, RequestTrace};
+use crate::errors::AppError;
+use crate::observability::redact_secrets;
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -5,10 +9,6 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::api::health::AppState;
-use crate::domain::{CreateTraceRequest, RequestTrace};
-use crate::errors::AppError;
-use crate::observability::redact_secrets;
 
 #[derive(Deserialize)]
 pub struct TraceQuery {
@@ -63,7 +63,14 @@ pub async fn create_trace(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateTraceRequest>,
 ) -> Result<Json<RequestTrace>, AppError> {
-    let id = format!("tr-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
+    let id = format!(
+        "tr-{}",
+        Uuid::new_v4()
+            .to_string()
+            .chars()
+            .take(8)
+            .collect::<String>()
+    );
     let trace_id = format!("tr-{}", chrono::Utc::now().format("%Y%m%d%H%M%S"));
 
     let total_tokens = payload.prompt_tokens + payload.completion_tokens;
@@ -75,7 +82,9 @@ pub async fn create_trace(
 
     let redacted_p = payload.prompt.as_deref().map(redact_secrets);
     let redacted_c = payload.completion.as_deref().map(redact_secrets);
-    let meta_str = payload.metadata.map(|m| serde_json::to_string(&m).unwrap_or_default());
+    let meta_str = payload
+        .metadata
+        .map(|m| serde_json::to_string(&m).unwrap_or_default());
 
     sqlx::query(
         r#"
@@ -85,7 +94,7 @@ pub async fn create_trace(
             estimated_cost, redacted_prompt, redacted_completion, metadata,
             error_message, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        "#
+        "#,
     )
     .bind(&id)
     .bind(&trace_id)

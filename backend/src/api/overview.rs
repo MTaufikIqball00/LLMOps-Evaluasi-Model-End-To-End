@@ -1,8 +1,8 @@
+use crate::api::health::AppState;
+use crate::errors::AppError;
 use axum::{extract::State, Json};
 use serde::Serialize;
 use std::sync::Arc;
-use crate::api::health::AppState;
-use crate::errors::AppError;
 
 #[derive(Serialize)]
 pub struct OverviewStats {
@@ -110,12 +110,11 @@ pub async fn get_overview_stats(
     .fetch_one(&state.pool)
     .await?;
 
-    let budget_row: (f64, f64) = sqlx::query_as(
-        "SELECT monthly_budget_usd, current_spend_usd FROM budget_settings LIMIT 1",
-    )
-    .fetch_one(&state.pool)
-    .await
-    .unwrap_or((2500.0, 1428.50));
+    let budget_row: (f64, f64) =
+        sqlx::query_as("SELECT monthly_budget_usd, current_spend_usd FROM budget_settings LIMIT 1")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((2500.0, 1428.50));
 
     let budget_used_pct = if budget_row.0 > 0.0 {
         (budget_row.1 / budget_row.0) * 100.0

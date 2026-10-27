@@ -10,7 +10,9 @@ pub async fn check_status(
     let url = format!("https://api.github.com/repos/{}/actions/runs", github_repo);
     let start = Instant::now();
 
-    let mut req = client.get(&url).header("User-Agent", "LLMOps-Control-Center");
+    let mut req = client
+        .get(&url)
+        .header("User-Agent", "LLMOps-Control-Center");
     if let Some(tok) = github_token {
         req = req.header("Authorization", format!("Bearer {}", tok));
     }

@@ -1,9 +1,9 @@
-use axum::{extract::State, Json};
-use serde::Serialize;
-use std::sync::Arc;
 use crate::api::health::AppState;
 use crate::domain::{BudgetSetting, PricingEntry, UpdateBudgetRequest};
 use crate::errors::AppError;
+use axum::{extract::State, Json};
+use serde::Serialize;
+use std::sync::Arc;
 
 #[derive(Serialize)]
 pub struct CostSummaryReport {
@@ -126,9 +126,10 @@ pub async fn get_cost_summary(
 pub async fn list_pricing_catalog(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<PricingEntry>>, AppError> {
-    let list: Vec<PricingEntry> = sqlx::query_as("SELECT * FROM pricing_catalog ORDER BY provider ASC")
-        .fetch_all(&state.pool)
-        .await?;
+    let list: Vec<PricingEntry> =
+        sqlx::query_as("SELECT * FROM pricing_catalog ORDER BY provider ASC")
+            .fetch_all(&state.pool)
+            .await?;
     Ok(Json(list))
 }
 
@@ -137,10 +138,14 @@ pub async fn update_budget(
     Json(payload): Json<UpdateBudgetRequest>,
 ) -> Result<Json<BudgetSetting>, AppError> {
     if payload.monthly_budget_usd <= 0.0 {
-        return Err(AppError::BadRequest("Monthly budget must be positive".to_string()));
+        return Err(AppError::BadRequest(
+            "Monthly budget must be positive".to_string(),
+        ));
     }
     if payload.alert_threshold_pct <= 0.0 || payload.alert_threshold_pct > 100.0 {
-        return Err(AppError::BadRequest("Alert threshold must be between 1% and 100%".to_string()));
+        return Err(AppError::BadRequest(
+            "Alert threshold must be between 1% and 100%".to_string(),
+        ));
     }
 
     sqlx::query(

@@ -36,7 +36,10 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, AppError> {
     // Seed baseline data if empty
     seed_if_empty(&pool).await?;
 
-    info!("Database initialized and verified successfully at {}", database_url);
+    info!(
+        "Database initialized and verified successfully at {}",
+        database_url
+    );
     Ok(pool)
 }
 

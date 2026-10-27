@@ -1,14 +1,14 @@
-use axum::{
-    extract::{Path, State},
-    Json,
-};
-use std::sync::Arc;
 use crate::api::health::AppState;
 use crate::domain::{IntegrationConfig, IntegrationStatusReport, UpdateIntegrationRequest};
 use crate::errors::AppError;
 use crate::integrations::{
     github_actions, grafana, kubernetes, mlflow, prometheus, ragas, trulens, wandb,
 };
+use axum::{
+    extract::{Path, State},
+    Json,
+};
+use std::sync::Arc;
 
 pub async fn list_integrations(
     State(state): State<Arc<AppState>>,
@@ -26,7 +26,8 @@ pub async fn list_integrations(
         ragas::check_status().await,
         trulens::check_status().await,
         kubernetes::check_status().await,
-        github_actions::check_status(&client, &state.github_repo, state.github_token.as_deref()).await,
+        github_actions::check_status(&client, &state.github_repo, state.github_token.as_deref())
+            .await,
     ];
 
     Ok(Json(reports))
@@ -53,7 +54,11 @@ pub async fn test_integration(
             github_actions::check_status(&client, &state.github_repo, state.github_token.as_deref())
                 .await
         }
-        _ => return Err(AppError::BadRequest(format!("Unknown integration '{name}'"))),
+        _ => {
+            return Err(AppError::BadRequest(format!(
+                "Unknown integration '{name}'"
+            )))
+        }
     };
 
     Ok(Json(report))
@@ -73,13 +78,16 @@ pub async fn update_integration(
         }
     });
 
-    let exists: Option<(String,)> = sqlx::query_as("SELECT id FROM integrations_config WHERE service_name = ?")
-        .bind(&name)
-        .fetch_optional(&state.pool)
-        .await?;
+    let exists: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM integrations_config WHERE service_name = ?")
+            .bind(&name)
+            .fetch_optional(&state.pool)
+            .await?;
 
     if exists.is_none() {
-        return Err(AppError::NotFound(format!("Integration '{name}' not found")));
+        return Err(AppError::NotFound(format!(
+            "Integration '{name}' not found"
+        )));
     }
 
     if let Some(url) = payload.endpoint_url {
@@ -106,10 +114,11 @@ pub async fn update_integration(
             .await?;
     }
 
-    let updated: IntegrationConfig = sqlx::query_as("SELECT * FROM integrations_config WHERE service_name = ?")
-        .bind(&name)
-        .fetch_one(&state.pool)
-        .await?;
+    let updated: IntegrationConfig =
+        sqlx::query_as("SELECT * FROM integrations_config WHERE service_name = ?")
+            .bind(&name)
+            .fetch_one(&state.pool)
+            .await?;
 
     Ok(Json(updated))
 }
