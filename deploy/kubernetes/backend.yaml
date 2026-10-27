@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llmops-backend
+  namespace: llmops
+  labels:
+    app: llmops-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: llmops-backend
+  template:
+    metadata:
+      labels:
+        app: llmops-backend
+    spec:
+      containers:
+        - name: backend
+          image: llmops-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8210
+          envFrom:
+            - configMapRef:
+                name: llmops-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8210
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8210
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-backend-svc
+  namespace: llmops
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8210
+      targetPort: 8210
+      protocol: TCP
+      name: http
+  selector:
+    app: llmops-backend

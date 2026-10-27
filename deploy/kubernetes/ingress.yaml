@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llmops-ingress
+  namespace: llmops
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+spec:
+  rules:
+    - host: llmops.enterprise.internal
+      http:
+        paths:
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: llmops-backend-svc
+                port:
+                  number: 8210
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: llmops-frontend-svc
+                port:
+                  number: 3210

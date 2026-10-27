@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llmops-frontend
+  namespace: llmops
+  labels:
+    app: llmops-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: llmops-frontend
+  template:
+    metadata:
+      labels:
+        app: llmops-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: llmops-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3210
+          env:
+            - name: PORT
+              value: "3210"
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://llmops-backend-svc:8210"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-frontend-svc
+  namespace: llmops
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3210
+      targetPort: 3210
+      protocol: TCP
+      name: http
+  selector:
+    app: llmops-frontend

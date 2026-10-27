@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  # LLMOps Control Center — Rust Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: llmops-backend
+    ports:
+      - "8210:8210"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8210
+      - FRONTEND_ORIGIN=http://localhost:3210
+      - DATABASE_URL=sqlite://data/llmops.db?mode=rwc
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8210/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # LLMOps Control Center — Next.js + Tailwind Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: llmops-frontend
+    ports:
+      - "3210:3210"
+    environment:
+      - PORT=3210
+      - NEXT_PUBLIC_API_URL=http://localhost:8210
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Optional Observability: Prometheus
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: llmops-prometheus
+    ports:
+      - "9190:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+    profiles:
+      - observability
+
+  # Optional Observability: Grafana
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: llmops-grafana
+    ports:
+      - "3310:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - observability
+
+  # Optional Experiment Tracking: MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    container_name: llmops-mlflow
+    ports:
+      - "5500:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000
+    restart: unless-stopped
+    profiles:
+      - tracking
