@@ -39,6 +39,7 @@ export default function CicdPage() {
       });
       setIsModalOpen(false);
       loadWorkflows();
+      setTimeout(loadWorkflows, 1000);
     } catch (err: any) {
       alert(`Trigger failed: ${err.message}`);
     }

@@ -82,6 +82,7 @@ export default function EvaluationsPage() {
       });
       setIsTriggerModalOpen(false);
       loadEvaluations();
+      setTimeout(loadEvaluations, 1500);
     } catch (err: any) {
       alert(`Failed to trigger evaluation: ${err.message}`);
     }

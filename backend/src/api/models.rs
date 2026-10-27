@@ -19,16 +19,18 @@ pub async fn list_models(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ModelListQuery>,
 ) -> Result<Json<Vec<Model>>, AppError> {
-    let mut sql = "SELECT * FROM models WHERE 1=1".to_string();
+    let mut qb = sqlx::QueryBuilder::new("SELECT * FROM models WHERE 1=1");
     if let Some(ref stage) = query.stage {
-        sql.push_str(&format!(" AND stage = '{}'", stage.replace('\'', "''")));
+        qb.push(" AND stage = ");
+        qb.push_bind(stage);
     }
     if let Some(ref fw) = query.framework {
-        sql.push_str(&format!(" AND framework LIKE '%{}%'", fw.replace('\'', "''")));
+        qb.push(" AND framework LIKE ");
+        qb.push_bind(format!("%{}%", fw));
     }
-    sql.push_str(" ORDER BY created_at DESC");
+    qb.push(" ORDER BY created_at DESC");
 
-    let models: Vec<Model> = sqlx::query_as(&sql).fetch_all(&state.pool).await?;
+    let models: Vec<Model> = qb.build_query_as().fetch_all(&state.pool).await?;
     Ok(Json(models))
 }
 

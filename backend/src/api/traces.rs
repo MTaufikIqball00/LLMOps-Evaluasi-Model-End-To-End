@@ -22,22 +22,26 @@ pub async fn list_traces(
     State(state): State<Arc<AppState>>,
     Query(query): Query<TraceQuery>,
 ) -> Result<Json<Vec<RequestTrace>>, AppError> {
-    let mut sql = "SELECT * FROM request_traces WHERE 1=1".to_string();
+    let mut qb = sqlx::QueryBuilder::new("SELECT * FROM request_traces WHERE 1=1");
 
     if let Some(ref m) = query.model {
-        sql.push_str(&format!(" AND model_name LIKE '%{}%'", m.replace('\'', "''")));
+        qb.push(" AND model_name LIKE ");
+        qb.push_bind(format!("%{}%", m));
     }
     if let Some(ref p) = query.provider {
-        sql.push_str(&format!(" AND provider = '{}'", p.replace('\'', "''")));
+        qb.push(" AND provider = ");
+        qb.push_bind(p);
     }
     if let Some(status) = query.status {
-        sql.push_str(&format!(" AND status_code = {status}"));
+        qb.push(" AND status_code = ");
+        qb.push_bind(status);
     }
 
     let limit = query.limit.unwrap_or(50).min(200);
-    sql.push_str(&format!(" ORDER BY created_at DESC LIMIT {limit}"));
+    qb.push(" ORDER BY created_at DESC LIMIT ");
+    qb.push_bind(limit);
 
-    let traces: Vec<RequestTrace> = sqlx::query_as(&sql).fetch_all(&state.pool).await?;
+    let traces: Vec<RequestTrace> = qb.build_query_as().fetch_all(&state.pool).await?;
     Ok(Json(traces))
 }
 

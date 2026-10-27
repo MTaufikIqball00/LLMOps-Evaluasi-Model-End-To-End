@@ -16,7 +16,7 @@ export function Sparkline({ data, color = "#6366f1", height = 40 }: SparklinePro
   const width = 100;
   const points = data
     .map((val, idx) => {
-      const x = (idx / (data.length - 1)) * width;
+      const x = (idx / Math.max(1, data.length - 1)) * width;
       const y = height - ((val - min) / range) * (height - 8) - 4;
       return `${x},${y}`;
     })
@@ -115,7 +115,7 @@ export function TimeseriesChart({
           {series.map((s) => {
             const points = s.data
               .map((val, idx) => {
-                const x = (idx / (labels.length - 1)) * chartWidth;
+                const x = (idx / Math.max(1, labels.length - 1)) * chartWidth;
                 const y = usableHeight - ((val - min) / range) * usableHeight;
                 return `${x},${y}`;
               })
