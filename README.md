@@ -5,7 +5,7 @@
 [![Frontend: Next.js 14](https://img.shields.io/badge/Frontend-Next.js%2014%20App%20Router-black.svg?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![Styling: Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS%203.4-38bdf8.svg?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
 [![Database: SQLite (Zero-Setup)](https://img.shields.io/badge/Persistence-SQLite%20(SQLx)-003B57.svg?style=flat-square&logo=sqlite)](https://sqlite.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 An enterprise-grade, end-to-end LLMOps and Model Evaluation Platform engineered from scratch with a high-performance **Rust (Axum + Tokio + SQLx)** backend, a modern **Next.js 14 + TypeScript + Tailwind CSS** frontend, zero-dependency embedded persistence, and native algorithmic quality and hallucination evaluation engines.
 
@@ -289,4 +289,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test_endpoints.ps1
 ---
 
 ## 📄 Lisensi
-Proyek ini didistribusikan di bawah lisensi [MIT](LICENSE). Terbuka untuk pengembangan dan riset enterprise LLMOps.
+Proyek ini didistribusikan di bawah lisensi [Apache 2.0](LICENSE). Terbuka untuk pengembangan dan riset enterprise LLMOps.

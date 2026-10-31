@@ -2,6 +2,7 @@
   "name": "llmops-control-center-frontend",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "node ./node_modules/next/dist/bin/next dev -p 3210",
     "build": "node ./node_modules/next/dist/bin/next build",
