@@ -69,7 +69,7 @@ async fn test_primary_and_unique_key_constraints() {
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
         VALUES ('m-llama31-70b', 'Duplicate Model', 'vLLM', 'Text', 'Dev', 'v1.0')
-        "#
+        "#,
     )
     .execute(&pool)
     .await;
@@ -84,7 +84,7 @@ async fn test_primary_and_unique_key_constraints() {
         r#"
         INSERT INTO integrations_config (id, service_name, last_status)
         VALUES ('int-duplicate', 'mlflow', 'Connected')
-        "#
+        "#,
     )
     .execute(&pool)
     .await;
@@ -99,7 +99,7 @@ async fn test_primary_and_unique_key_constraints() {
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
         VALUES ('m-null-test', NULL, 'vLLM', 'Text', 'Dev', 'v1.0')
-        "#
+        "#,
     )
     .execute(&pool)
     .await;
@@ -122,14 +122,17 @@ async fn test_foreign_key_cascading_deletes() {
     let pool = persistence::init_db(&db_url).await.unwrap();
 
     // Enable foreign keys explicitly in SQLite session
-    sqlx::query("PRAGMA foreign_keys = ON;").execute(&pool).await.unwrap();
+    sqlx::query("PRAGMA foreign_keys = ON;")
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let eval_id = "eval-fk-test-01";
     sqlx::query(
         r#"
         INSERT INTO evaluations (id, name, model_name, dataset_name, evaluator_framework, status)
         VALUES (?, 'Cascade Test Eval', 'TestModel', 'Dataset', 'Ragas', 'Completed')
-        "#
+        "#,
     )
     .bind(eval_id)
     .execute(&pool)
@@ -141,7 +144,7 @@ async fn test_foreign_key_cascading_deletes() {
         INSERT INTO evaluation_test_cases (id, evaluation_id, question, generated_answer)
         VALUES ('tc-fk-01', ?, 'Question 1', 'Answer 1'),
                ('tc-fk-02', ?, 'Question 2', 'Answer 2')
-        "#
+        "#,
     )
     .bind(eval_id)
     .bind(eval_id)
@@ -150,13 +153,12 @@ async fn test_foreign_key_cascading_deletes() {
     .unwrap();
 
     // Verify test cases exist
-    let before_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?"
-    )
-    .bind(eval_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let before_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?")
+            .bind(eval_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(before_count.0, 2);
 
     // Delete parent evaluation
@@ -167,13 +169,12 @@ async fn test_foreign_key_cascading_deletes() {
         .unwrap();
 
     // Verify child test cases were deleted via ON DELETE CASCADE
-    let after_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?"
-    )
-    .bind(eval_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let after_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?")
+            .bind(eval_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(after_count.0, 0, "Child test cases must be cascade-deleted");
 
     drop(pool);
@@ -195,7 +196,7 @@ async fn test_transaction_rollback_integrity() {
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
         VALUES ('m-tx-01', 'Tx Test Model', 'vLLM', 'Text', 'Dev', 'v1.0')
-        "#
+        "#,
     )
     .execute(&mut *tx)
     .await
@@ -206,7 +207,7 @@ async fn test_transaction_rollback_integrity() {
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
         VALUES ('m-tx-01', 'Tx Test Duplicate', 'vLLM', 'Text', 'Dev', 'v1.0')
-        "#
+        "#,
     )
     .execute(&mut *tx)
     .await;
@@ -220,7 +221,10 @@ async fn test_transaction_rollback_integrity() {
         .fetch_optional(&pool)
         .await
         .unwrap();
-    assert!(check.is_none(), "Rolled back transaction data must not exist");
+    assert!(
+        check.is_none(),
+        "Rolled back transaction data must not exist"
+    );
 
     drop(pool);
     let _ = std::fs::remove_file(&db_path);

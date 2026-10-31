@@ -6,6 +6,7 @@ use std::time::Instant;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 struct TestApp {
     pub base_url: String,
     pub pool: persistence::DbPool,
@@ -186,7 +187,10 @@ async fn test_models_lifecycle_and_validation() {
 
     // 5. Promote stage to Staging
     let res_patch = client
-        .patch(format!("{}/api/v1/models/{}/stage", app.base_url, created.id))
+        .patch(format!(
+            "{}/api/v1/models/{}/stage",
+            app.base_url, created.id
+        ))
         .json(&json!({ "stage": "Staging" }))
         .send()
         .await
@@ -197,7 +201,10 @@ async fn test_models_lifecycle_and_validation() {
 
     // 6. Attempt invalid stage transition (Rejection with 400 Bad Request)
     let res_invalid = client
-        .patch(format!("{}/api/v1/models/{}/stage", app.base_url, created.id))
+        .patch(format!(
+            "{}/api/v1/models/{}/stage",
+            app.base_url, created.id
+        ))
         .json(&json!({ "stage": "InvalidStageName" }))
         .send()
         .await
@@ -206,7 +213,10 @@ async fn test_models_lifecycle_and_validation() {
 
     // 7. Non-existent model lookup (404 Not Found)
     let res_404 = client
-        .get(format!("{}/api/v1/models/non-existent-id-9999", app.base_url))
+        .get(format!(
+            "{}/api/v1/models/non-existent-id-9999",
+            app.base_url
+        ))
         .send()
         .await
         .unwrap();
@@ -269,14 +279,20 @@ async fn test_evaluations_and_metric_definitions() {
 
     // 1. Get metric definitions
     let res_defs = client
-        .get(format!("{}/api/v1/evaluations/metrics/definitions", app.base_url))
+        .get(format!(
+            "{}/api/v1/evaluations/metrics/definitions",
+            app.base_url
+        ))
         .send()
         .await
         .unwrap();
     assert_eq!(res_defs.status(), StatusCode::OK);
     let defs: Vec<Value> = res_defs.json().await.unwrap();
     assert_eq!(defs.len(), 6);
-    let names: Vec<&str> = defs.iter().filter_map(|d| d["metric_name"].as_str()).collect();
+    let names: Vec<&str> = defs
+        .iter()
+        .filter_map(|d| d["metric_name"].as_str())
+        .collect();
     assert!(names.contains(&"Faithfulness"));
     assert!(names.contains(&"Hallucination Score"));
 
@@ -355,11 +371,31 @@ async fn test_request_traces_and_secret_scrubbing() {
     let created: RequestTrace = res.json().await.unwrap();
 
     // Verify secret scrubbing occurred before DB persistence
-    assert!(!created.redacted_prompt.as_ref().unwrap().contains("sk-abcdef1234567890abcdef123456"));
-    assert!(!created.redacted_prompt.as_ref().unwrap().contains("ghp_11223344556677889900aa"));
-    assert!(created.redacted_prompt.as_ref().unwrap().contains("[REDACTED_SECRET]"));
-    assert!(!created.redacted_completion.as_ref().unwrap().contains("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"));
-    assert!(created.redacted_completion.as_ref().unwrap().contains("[REDACTED_SECRET]"));
+    assert!(!created
+        .redacted_prompt
+        .as_ref()
+        .unwrap()
+        .contains("sk-abcdef1234567890abcdef123456"));
+    assert!(!created
+        .redacted_prompt
+        .as_ref()
+        .unwrap()
+        .contains("ghp_11223344556677889900aa"));
+    assert!(created
+        .redacted_prompt
+        .as_ref()
+        .unwrap()
+        .contains("[REDACTED_SECRET]"));
+    assert!(!created
+        .redacted_completion
+        .as_ref()
+        .unwrap()
+        .contains("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"));
+    assert!(created
+        .redacted_completion
+        .as_ref()
+        .unwrap()
+        .contains("[REDACTED_SECRET]"));
 
     // 2. Query trace by ID
     let res_get = client
@@ -449,7 +485,10 @@ async fn test_deployments_and_restart_simulation() {
 
     // 2. Rolling restart deployment
     let res_restart = client
-        .post(format!("{}/api/v1/deployments/{}/restart", app.base_url, target_id))
+        .post(format!(
+            "{}/api/v1/deployments/{}/restart",
+            app.base_url, target_id
+        ))
         .send()
         .await
         .unwrap();
@@ -459,7 +498,10 @@ async fn test_deployments_and_restart_simulation() {
 
     // 3. Restart non-existent deployment (404)
     let res_404 = client
-        .post(format!("{}/api/v1/deployments/dep-fake-9999/restart", app.base_url))
+        .post(format!(
+            "{}/api/v1/deployments/dep-fake-9999/restart",
+            app.base_url
+        ))
         .send()
         .await
         .unwrap();
@@ -528,7 +570,10 @@ async fn test_integrations_probe_hub() {
 
     // 3. Test unknown integration probe rejection (400)
     let res_bad = client
-        .post(format!("{}/api/v1/integrations/unknown_service/test", app.base_url))
+        .post(format!(
+            "{}/api/v1/integrations/unknown_service/test",
+            app.base_url
+        ))
         .send()
         .await
         .unwrap();

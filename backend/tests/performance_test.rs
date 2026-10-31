@@ -5,6 +5,7 @@ use std::time::Instant;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 struct PerfTestApp {
     pub base_url: String,
     pub pool: persistence::DbPool,
@@ -130,7 +131,8 @@ async fn test_concurrent_request_stability() {
 
 #[test]
 fn test_secret_scrubber_throughput() {
-    let large_sample = "User input with sk-1234567890abcdef1234567890 and normal text. \n".repeat(500);
+    let large_sample =
+        "User input with sk-1234567890abcdef1234567890 and normal text. \n".repeat(500);
     let start = Instant::now();
     let sanitized = redact_secrets(&large_sample);
     let elapsed = start.elapsed();

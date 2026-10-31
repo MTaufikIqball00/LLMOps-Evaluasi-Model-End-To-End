@@ -1,5 +1,6 @@
 use llmops_backend::integrations::ragas::{evaluate_sample, EvaluationResult};
 
+#[allow(dead_code)]
 struct ControlledEvalTestCase {
     pub id: &'static str,
     pub description: &'static str,
@@ -144,9 +145,18 @@ fn test_controlled_8_case_evaluation_dataset() {
 
         // Assertions based on verified expectations
         if tc.id == "CASE-01" {
-            assert!(res.faithfulness >= 0.80, "Case 01 must have high faithfulness (>= 0.80)");
-            assert!(res.groundedness >= 0.80, "Case 01 must have high groundedness (>= 0.80)");
-            assert!(!res.hallucination_detected, "Case 01 must not trigger hallucination");
+            assert!(
+                res.faithfulness >= 0.80,
+                "Case 01 must have high faithfulness (>= 0.80)"
+            );
+            assert!(
+                res.groundedness >= 0.80,
+                "Case 01 must have high groundedness (>= 0.80)"
+            );
+            assert!(
+                !res.hallucination_detected,
+                "Case 01 must not trigger hallucination"
+            );
         }
 
         if tc.id == "CASE-03" {
@@ -175,13 +185,14 @@ fn test_hallucination_index_formula_divergence_audit() {
     let context_precision: f64 = 0.75;
 
     // Implemented formula: 1.0 - Faithfulness
-    let implemented_score = (((1.0 - faithfulness) * 100.0) as f64).round() / 100.0;
+    let implemented_score = ((1.0 - faithfulness) * 100.0).round() / 100.0;
     assert_eq!(implemented_score, 0.20);
 
     // Documented formula: 1.0 - (0.40 * F + 0.35 * G + 0.25 * P)
-    let documented_score: f64 = 1.0 - (0.40 * faithfulness + 0.35 * groundedness + 0.25 * context_precision);
+    let documented_score: f64 =
+        1.0 - (0.40 * faithfulness + 0.35 * groundedness + 0.25 * context_precision);
     // 1.0 - (0.32 + 0.245 + 0.1875) = 1.0 - 0.7525 = 0.2475
-    let documented_rounded = ((documented_score * 1000.0) as f64).round() / 1000.0;
+    let documented_rounded = (documented_score * 1000.0).round() / 1000.0;
     assert!((documented_rounded - 0.2475).abs() < 0.001);
 
     // Formal assertion: Document the mathematical difference for root cause reporting

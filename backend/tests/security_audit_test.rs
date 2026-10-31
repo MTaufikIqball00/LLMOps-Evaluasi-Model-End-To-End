@@ -74,7 +74,11 @@ async fn test_sql_injection_defense_in_query_builders() {
     ];
 
     for payload in sqli_payloads {
-        let url = format!("{}/api/v1/models?framework={}", app.base_url, urlencoding::encode(payload));
+        let url = format!(
+            "{}/api/v1/models?framework={}",
+            app.base_url,
+            urlencoding::encode(payload)
+        );
         let res = client.get(&url).send().await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         // If SQL injection succeeded, it would return all models or throw SQLite syntax error.
@@ -87,9 +91,16 @@ async fn test_sql_injection_defense_in_query_builders() {
     }
 
     // Verify models table is intact
-    let check_res = client.get(format!("{}/api/v1/models", app.base_url)).send().await.unwrap();
+    let check_res = client
+        .get(format!("{}/api/v1/models", app.base_url))
+        .send()
+        .await
+        .unwrap();
     let all_models: Vec<serde_json::Value> = check_res.json().await.unwrap();
-    assert!(all_models.len() >= 4, "Models table must remain intact after SQLi probes");
+    assert!(
+        all_models.len() >= 4,
+        "Models table must remain intact after SQLi probes"
+    );
 }
 
 #[test]
@@ -97,7 +108,10 @@ fn test_exhaustive_secret_scrubbing_patterns() {
     let test_cases = vec![
         ("sk-1234567890abcdef1234567890", "[REDACTED_SECRET]"),
         ("ghp_1234567890abcdefghijklmnopqrstuv", "[REDACTED_SECRET]"),
-        ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", "[REDACTED_SECRET]"),
+        (
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+            "[REDACTED_SECRET]",
+        ),
         ("password = UltraSecretPassword123!", "[REDACTED_SECRET]"),
         ("password: SuperSecret987", "[REDACTED_SECRET]"),
         ("api_key: sk-custom-key-value-12345", "[REDACTED_SECRET]"),
@@ -159,7 +173,10 @@ async fn test_cors_policy_enforcement() {
         allow_header.is_some(),
         "CORS allow origin must be present for authorized origin"
     );
-    assert_eq!(allow_header.unwrap().to_str().unwrap(), "http://localhost:3210");
+    assert_eq!(
+        allow_header.unwrap().to_str().unwrap(),
+        "http://localhost:3210"
+    );
 
     // 2. Disallowed Origin: http://attacker.evil.com
     let res_blocked = client
@@ -182,7 +199,10 @@ async fn test_error_response_no_credential_leakage() {
 
     // Trigger 404
     let res_404 = client
-        .get(format!("{}/api/v1/models/non-existent-secret-check", app.base_url))
+        .get(format!(
+            "{}/api/v1/models/non-existent-secret-check",
+            app.base_url
+        ))
         .send()
         .await
         .unwrap();
