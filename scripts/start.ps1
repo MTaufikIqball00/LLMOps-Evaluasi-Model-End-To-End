@@ -66,9 +66,11 @@ Write-Host '==========================================================' -Foregro
 Write-Host '   LLMOPS CONTROL CENTER RUNNING SUCCESSFULLY             ' -ForegroundColor Green
 Write-Host '==========================================================' -ForegroundColor Green
 Write-Host " Dashboard UI:      $frontendUrl" -ForegroundColor Cyan
+Write-Host " QA Dashboard:      $frontendUrl/qa" -ForegroundColor Green
 Write-Host " Backend API:       http://localhost:$BackendPort" -ForegroundColor Cyan
 Write-Host " Health Endpoint:   $healthUrl" -ForegroundColor Cyan
 Write-Host " Metrics:           http://localhost:$BackendPort/api/v1/metrics" -ForegroundColor Cyan
+Write-Host " QA CLI Runner:     node --experimental-strip-types qa-engine/src/cli.ts" -ForegroundColor DarkCyan
 Write-Host " Backend PID:       $($backendProcess.Id)" -ForegroundColor White
 Write-Host " Frontend PID:      $($frontendProcess.Id)" -ForegroundColor White
 Write-Host " Logs Directory:    $logDir" -ForegroundColor White

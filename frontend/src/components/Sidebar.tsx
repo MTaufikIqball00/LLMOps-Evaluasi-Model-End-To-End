@@ -16,6 +16,7 @@ import {
   Radio,
   Cpu,
   Layers,
+  ShieldCheck,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/cicd", label: "CI/CD Pipelines", icon: GitBranch },
   { href: "/integrations", label: "Integrations", icon: Radio },
   { href: "/system", label: "System Health", icon: Cpu },
+  { href: "/qa", label: "QA & Audit Engine", icon: ShieldCheck },
 ];
 
 export function Sidebar() {

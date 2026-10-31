@@ -26,5 +26,7 @@ frontend/out/
 # IDE & OS
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db
+# Playwright test artifacts
+frontend/test-results/
+frontend/playwright-report/
+
