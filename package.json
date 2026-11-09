@@ -1,0 +1,15 @@
+{
+  "name": "llmops-control-center",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
+    "lint": "npm --prefix frontend run lint"
+  },
+  "dependencies": {
+    "next": "14.2.15"
+  }
+}
