@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ListTree, ShieldAlert, Clock, Coins, Search, FileCode, CheckCircle, AlertCircle } from "lucide-react";
@@ -11,25 +11,25 @@ export default function TracesPage() {
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
-  const loadTraces = async () => {
+  const loadTraces = useCallback(async () => {
     try {
       setLoading(true);
       const url = modelFilter === "all" ? "/traces" : `/traces?model=${modelFilter}`;
       const data = await fetchApi<any[]>(url);
       setTraces(data);
-      if (data.length > 0 && !selectedTrace) {
-        setSelectedTrace(data[0]);
+      if (data.length > 0) {
+        setSelectedTrace((prev: any) => prev ?? data[0]);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [modelFilter]);
 
   useEffect(() => {
     loadTraces();
-  }, [modelFilter]);
+  }, [loadTraces]);
 
   return (
     <div className="space-y-6">

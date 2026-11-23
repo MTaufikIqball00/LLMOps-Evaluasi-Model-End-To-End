@@ -67,7 +67,7 @@ Repository: **[https://github.com/MTaufikIqball00/LLMOps-Evaluasi-Model-End-To-E
 Platform ini mengusung arsitektur monorepo modular:
 - **Rust Axum**: Berperan sebagai primary backend untuk orkestrasi bisnis, validasi tipe yang ketat (*compile-time safety*), background worker Tokio, dan eksposisi metrik.
 - **Next.js 14 (App Router)**: Berperan sebagai UI enterprise modern dengan styling Tailwind CSS dan zero-dependency dynamic SVG visualizer.
-- **Embedded SQLite (SQLx)**: Berjalan tanpa dependensi container wajib untuk memudahkan deployment lokal cepat (*zero-friction startup*).
+- **Embedded SQLite / PostgreSQL (SQLx AnyPool)**: Mendukung SQLite zero-setup (mode WAL & Foreign Keys otomatis) sekaligus **PostgreSQL** via `DATABASE_URL` untuk deployment produksi terdistribusi.
 
 ```
                                 ┌─────────────────────────────────────────┐
@@ -113,12 +113,12 @@ Seluruh port telah dikonfigurasi terisolasi dan divalidasi ketersediaannya untuk
 
 ### Backend (Rust)
 - **Rust Toolchain**: Rust 1.80+ (Stable Edition)
-- **Web Framework**: Axum 0.7 + Tower-HTTP 0.6 (CORS, Trace, Compression)
-- **Asynchronous Engine**: Tokio 1.40 (Multi-threaded runtime & scheduled workers)
-- **Persistence Layer**: SQLx 0.8 dengan driver SQLite runtime asynchronous
-- **HTTP Client**: Reqwest 0.12 dengan Rustls TLS
-- **Observability**: Tracing, Tracing-Subscriber, dan Regex Engine
-- **Centralized Errors**: Thiserror 2.0 dengan pemetaan status HTTP dan payload JSON seragam
+- **Web Framework**: Axum 0.7 + Tower-HTTP 0.6 (CORS Multi-Origin & `*.vercel.app`, `TimeoutLayer`, Sliding-Window Rate Limiting, Optional `ADMIN_API_KEY` Auth)
+- **Asynchronous Engine**: Tokio 1.40 (Multi-threaded runtime & scheduled evaluation/alert workers)
+- **Persistence Layer**: SQLx 0.8 `AnyPool` (SQLite WAL/FK otomatis + PostgreSQL native support)
+- **HTTP Client**: Reqwest 0.12 dengan Rustls TLS (AI Gateway, PromQL, GitHub Actions dispatch, Slack/Discord webhooks, LLM-as-a-Judge)
+- **Observability & OpenAPI**: Tracing, Secret Scrubber Regex Engine, OpenMetrics, OpenAPI 3.1.0 & Swagger UI (`/api/v1/docs`)
+- **Centralized Errors**: Thiserror 2.0 dengan pemetaan status HTTP (`400`, `401`, `404`, `429`, `502`, `500`) dan payload JSON seragam
 
 ### Frontend (TypeScript & Tailwind)
 - **Framework**: Next.js 14.2.15 (React 18.3.1 + App Router)
@@ -191,29 +191,36 @@ chmod +x scripts/*.sh
 ### 5. Akses Antarmuka Web
 Setelah servis aktif:
 - **Control Center Dashboard**: [http://localhost:3210](http://localhost:3210)
-- **Rust Backend API**: [http://localhost:8210](http://localhost:8210)
-- **Health Check Endpoint**: [http://localhost:8210/api/health](http://localhost:8210/api/health)
-- **Prometheus Metrics**: [http://localhost:8210/metrics](http://localhost:8210/metrics)
+- **Prompt Registry & A/B Diff**: [http://localhost:3210/prompts](http://localhost:3210/prompts)
+- **Alerting & Webhooks**: [http://localhost:3210/alerts](http://localhost:3210/alerts)
+- **Autonomous QA Engine UI**: [http://localhost:3210/qa](http://localhost:3210/qa)
+- **Rust Backend API**: [http://localhost:8210/api/v1](http://localhost:8210/api/v1)
+- **Interactive Swagger Docs (OpenAPI)**: [http://localhost:8210/api/v1/docs](http://localhost:8210/api/v1/docs)
+- **Health Check Endpoint**: [http://localhost:8210/api/v1/health](http://localhost:8210/api/v1/health)
+- **Prometheus Metrics**: [http://localhost:8210/api/v1/metrics](http://localhost:8210/api/v1/metrics)
 
 ---
 
 ## 7. Struktur Modul & Navigasi Antarmuka (Navigation & Features)
 
-Aplikasi memiliki 11 halaman navigasi utama yang aktif:
+Aplikasi memiliki 14 halaman navigasi utama yang aktif:
 
 | # | Rute | Nama Fitur | Deskripsi Fungsionalitas |
 | :-: | :--- | :--- | :--- |
-| 1 | `/` | **Overview Dashboard** | KPI throughput, p50/p95/p99 latency trends, distribusi request model, dan status pipeline. |
+| 1 | `/` | **Overview Dashboard** | KPI throughput, real p50/p95/p99 latency percentiles dari database, distribusi request model, dan status pipeline. |
 | 2 | `/models` | **Model Registry** | Inventaris model, parameter (70B, 32B), checksum bobot, dan workflow promosi stage. |
-| 3 | `/experiments` | **Experiments** | Tracking hyperparameter, perbandingan loss/perplexity, dan visualisasi side-by-side run diff. |
-| 4 | `/evaluations` | **LLM Evaluations** | Suite evaluasi Ragas/TruLens: Faithfulness, Answer Relevance, Context Precision, dan deteksi halusinasi. |
-| 5 | `/monitoring` | **Production Monitoring** | Latensi percentiles, throughput (RPM), latency distribution histogram, dan status target scraper. |
-| 6 | `/traces` | **Traces & Requests** | Waterfall spans, latency token breakdown, payload viewer dengan sensor rahasia otomatis. |
-| 7 | `/costs` | **Token Usage & Costs** | Biaya per model/provider, konsumsi input vs output token, batas anggaran, dan alert spend limit. |
-| 8 | `/deployments` | **Deployments** | Monitoring pod Kubernetes inference (vLLM/TGI), VRAM GPU, dan pemicu rolling restart. |
-| 9 | `/cicd` | **CI/CD Pipelines** | Status pipeline GitHub Actions, commit SHA, durasi eksekusi, dan dispatch automated gate. |
-| 10 | `/integrations` | **Integrations Hub** | Uji probe konektivitas langsung untuk MLflow, W&B, Prometheus, Grafana, Ragas, K8s, dan GitHub Actions. |
-| 11 | `/system` | **System Health** | Status uptime proses, health pool database SQLite, alokasi port, dan postur keamanan SRE. |
+| 3 | `/prompts` | **Prompt Registry** | Manajemen versi template prompt, deteksi variabel `{{var}}`, stage promosi, dan perbandingan A/B diff. |
+| 4 | `/experiments` | **Experiments** | Tracking hyperparameter, perbandingan loss/perplexity, dan visualisasi side-by-side run diff. |
+| 5 | `/evaluations` | **LLM Evaluations** | Suite evaluasi Ragas/TruLens (dan LLM-as-a-Judge opsional): Faithfulness, Answer Relevance, Context Precision, dan Hallucination Index. |
+| 6 | `/monitoring` | **Production Monitoring** | Latensi percentiles riil (PromQL live atau bucket `request_traces`), throughput (RPM), histogram latensi, dan Grafana URL terkonfigurasi. |
+| 7 | `/traces` | **Traces & Requests** | Waterfall spans, token & biaya dinamis dari `pricing_catalog`, payload viewer dengan secret scrubbing menyeluruh. |
+| 8 | `/costs` | **Token Usage & Costs** | Biaya per model/provider, akumulasi spend bulanan atomik, batas anggaran, dan alert spend limit. |
+| 9 | `/alerts` | **Alerting & Webhooks** | Guardrail SLA (Hallucination, p95 latency, Budget, Error Rate) dengan webhook Slack/Discord/JSON & log insiden. |
+| 10 | `/deployments` | **Deployments** | Monitoring pod Kubernetes inference (vLLM/TGI), VRAM GPU, dan pemicu rolling restart. |
+| 11 | `/cicd` | **CI/CD Pipelines** | Status pipeline GitHub Actions, commit SHA, durasi eksekusi, dan real `workflow_dispatch` saat `GITHUB_TOKEN` tersedia. |
+| 12 | `/integrations` | **Integrations Hub** | Uji probe konektivitas langsung untuk MLflow, W&B, Prometheus, Grafana, Ragas, K8s, dan GitHub Actions. |
+| 13 | `/system` | **System Health** | Status uptime proses, health pool database SQLite WAL / PostgreSQL, alokasi port, dan postur keamanan SRE. |
+| 14 | `/qa` | **QA & Audit Engine** | Dashboard pengujian otonom, matriks cakupan fitur, root-cause analyzer, dan ekspor laporan (JSON/CSV). |
 
 ---
 
@@ -233,34 +240,55 @@ $$ \text{Hallucination Index} = 1.0 - \left( 0.40 \cdot \text{Faithfulness} + 0.
 
 ## 9. Keamanan, Redaksi Rahasia & Observabilitas (Security & SRE)
 
-- **Automated Secret Scrubbing**: Engine regex di [`src/observability/mod.rs`](backend/src/observability/mod.rs) mendeteksi dan menyensor token sensitif seperti API key OpenAI (`sk-...`), GitHub personal access token (`ghp_...`), dan header `Bearer ...` menjadi token aman `[REDACTED_SECRET]` sebelum data disimpan ke disk.
-- **Parameterization Anti-SQLi**: Seluruh query filter dinamis menggunakan `sqlx::QueryBuilder` dengan *strict parameterized binding* (`qb.push_bind(...)`) untuk mencegah celah keamanan SQL injection.
-- **CORS Protection**: Endpoint REST API dibatasi hanya melayani permintaan dari domain frontend terdaftar (`http://localhost:3210` dan `http://127.0.0.1:3210`).
-- **Graceful Shutdown**: Menangkap sinyal OS `SIGINT` / `SIGTERM` / `Ctrl+C` untuk menyelesaikan transaksi SQLite dan menghentikan worker secara bersih.
+- **Automated Secret Scrubbing**: Engine regex di [`src/observability/mod.rs`](backend/src/observability/mod.rs) mendeteksi dan menyensor token modern ber-hyphen OpenAI (`sk-proj-...`), Anthropic (`sk-ant-...`), GitHub (`ghp_...` / `github_pat_...`), Slack (`xoxb-...`), Hugging Face (`hf_...`), AWS (`AKIA...`), header `Bearer ...`, serta inline password/api_key di seluruh payload (`prompt`, `completion`, `error_message`, dan `metadata`) menjadi `[REDACTED_SECRET]`.
+- **Optional Admin API Key Guard, Rate Limiting & Timeouts**: Mutasi (`POST`/`PATCH`/`PUT`/`DELETE`) dapat dilindungi via `ADMIN_API_KEY` (`X-API-Key` atau `Authorization: Bearer`), dibatasi per-menit via `RATE_LIMIT_RPM`, dan dilindungi oleh global `TimeoutLayer` (`REQUEST_TIMEOUT_SECS`).
+- **Parameterized Queries & SQLite WAL/FK**: Seluruh query dinamis memanggil `adapt_sql` dan binding aman untuk mencegah SQL injection di SQLite maupun PostgreSQL; setiap koneksi SQLite otomatis mengaktifkan `PRAGMA foreign_keys = ON;` dan `PRAGMA journal_mode = WAL;`.
+- **Dynamic CORS Protection**: Mendukung daftar domain dipisah koma melalui `FRONTEND_ORIGIN` termasuk wildcard subdomain `https://*.vercel.app`.
+- **Graceful Shutdown**: Menangkap sinyal OS `SIGINT` / `SIGTERM` / `Ctrl+C` untuk menyelesaikan transaksi database dan menghentikan worker secara bersih.
 
 ---
 
 ## 10. REST API Reference & OpenAPI Endpoints
 
+Semua endpoint bisnis berada di bawah prefix `/api/v1/*`. Dokumentasi interaktif Swagger UI tersedia di `GET /api/v1/docs` dan skema OpenAPI 3.1.0 JSON di `GET /api/v1/openapi.json`.
+
 | Method | Endpoint | Deskripsi | Query Parameters / Body |
 | :---: | :--- | :--- | :--- |
-| `GET` | `/api/health` | Status kesehatan daemon & DB pool | - |
-| `GET` | `/api/overview` | Ringkasan metrik dashboard utama | - |
-| `GET` | `/api/models` | Daftar model di registry | `?stage=Production&framework=vLLM` |
-| `POST` | `/api/models` | Daftarkan model baru | Payload JSON model |
-| `PATCH` | `/api/models/:id/stage` | Promosikan stage model | `{"stage": "Production"}` |
-| `GET` | `/api/experiments` | Daftar eksperimen & runs | `?model_id=...&framework=...` |
-| `GET` | `/api/evaluations` | Daftar evaluasi & benchmark | `?model_id=...&eval_type=...` |
-| `POST` | `/api/evaluations/run` | Jalankan evaluasi asynchronous | `{"model_id": "...", "dataset": "..."}` |
-| `GET` | `/api/monitoring/metrics` | Metrik latensi & throughput | `?window=1h` |
-| `GET` | `/api/traces` | Riwayat trace permintaan | `?model=...&provider=...&status=200` |
-| `GET` | `/api/costs` | Biaya & kuota anggaran | - |
-| `GET` | `/api/deployments` | Status pod & serving K8s | - |
-| `POST` | `/api/deployments/:id/restart` | Rolling restart pod serving | - |
-| `GET` | `/api/cicd` | Riwayat pipeline CI/CD | - |
-| `POST` | `/api/cicd/trigger` | Trigger pipeline manual | `{"workflow": "model-eval-gate"}` |
-| `GET` | `/api/integrations` | Status probe semua integrasi | - |
-| `GET` | `/metrics` | Prometheus OpenMetrics exporter | - |
+| `GET` | `/api/v1/health` | Status kesehatan daemon & engine DB | - |
+| `GET` | `/api/v1/metrics` | Prometheus OpenMetrics exporter | - |
+| `GET` | `/api/v1/openapi.json` | Spesifikasi OpenAPI 3.1.0 | - |
+| `GET` | `/api/v1/docs` | Antarmuka Swagger UI interaktif | - |
+| `GET` | `/api/v1/overview/stats` | Ringkasan KPI dashboard & persentil riil | - |
+| `GET` | `/api/v1/models` | Daftar model di registry | `?stage=Production&framework=vLLM` |
+| `POST` | `/api/v1/models` | Daftarkan model baru | Payload JSON model |
+| `PATCH` | `/api/v1/models/:id/stage` | Promosikan stage model | `{"stage": "Production"}` |
+| `GET` | `/api/v1/prompts` | Daftar template prompt | `?stage=Production&slug=...` |
+| `POST` | `/api/v1/prompts` | Simpan versi template prompt baru | Payload JSON prompt |
+| `PATCH` / `DELETE` | `/api/v1/prompts/:id` | Ubah stage/template atau hapus versi | `{"stage": "Production"}` |
+| `GET` | `/api/v1/prompts/compare` | Perbandingan A/B & line diff prompt | `?a=prm-rag-v1&b=prm-rag-v2` |
+| `GET` | `/api/v1/experiments` | Daftar eksperimen & runs | `?model_id=...&framework=...` |
+| `POST` | `/api/v1/experiments` | Catat eksperimen baru | Payload JSON eksperimen |
+| `GET` | `/api/v1/experiments/compare` | Perbandingan eksperimen berdampingan | `?runs=id1,id2` |
+| `GET` | `/api/v1/evaluations` | Daftar evaluasi & benchmark | - |
+| `POST` | `/api/v1/evaluations` | Jalankan evaluasi (Native / LLM Judge) | `{"name": "...", "use_llm_judge": true}` |
+| `GET` | `/api/v1/evaluations/:id` | Detail evaluasi & hasil test case | - |
+| `GET` | `/api/v1/monitoring/metrics` | Deret waktu latensi (PromQL / SQL Traces) | - |
+| `GET` | `/api/v1/monitoring/latency-distribution` | Bucket histogram latensi | - |
+| `GET` / `POST` | `/api/v1/traces` | Riwayat / ingest trace + kalkulasi biaya atomik | `?model=...&provider=...&status=200` |
+| `POST` | `/api/v1/gateway/chat/completions` | AI Gateway OpenAI-compatible + auto trace/cost | `{"model": "gpt-4o", "messages": [...]}` |
+| `GET` | `/api/v1/costs/summary` | Ringkasan biaya & proyeksi bulanan | - |
+| `GET` | `/api/v1/costs/pricing` | Katalog tarif token per model/provider | - |
+| `PATCH` | `/api/v1/costs/budget` | Perbarui batas anggaran & threshold alert | `{"monthly_budget_usd": 3000, "alert_threshold_pct": 80}` |
+| `GET` / `POST` | `/api/v1/alerts/rules` | Daftar & buat rule alerting SLA | `metric_type`, `operator`, `threshold` |
+| `PATCH` / `DELETE` | `/api/v1/alerts/rules/:id` | Aktifkan/jeda/hapus rule alerting | `{"is_enabled": true}` |
+| `POST` | `/api/v1/alerts/rules/:id/test` | Kirim webhook uji coba Slack/Discord/JSON | - |
+| `POST` | `/api/v1/alerts/evaluate` | Evaluasi semua rule SLA sekarang | - |
+| `GET` | `/api/v1/alerts/events` | Riwayat insiden & status pengiriman webhook | - |
+| `GET` | `/api/v1/deployments` | Status pod & serving Kubernetes | - |
+| `POST` | `/api/v1/deployments/:id/restart` | Rolling restart pod serving | - |
+| `GET` | `/api/v1/cicd/workflows` | Riwayat pipeline CI/CD | - |
+| `POST` | `/api/v1/cicd/workflows/trigger` | Trigger GitHub `workflow_dispatch` atau lokal | `{"workflow_name": "...", "branch": "main"}` |
+| `GET` | `/api/v1/integrations` | Status probe semua 8 integrasi | - |
 
 ---
 

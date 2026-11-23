@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FlaskConical, GitCompare, Plus, ArrowUpDown, Clock } from "lucide-react";
@@ -11,20 +11,22 @@ export default function ExperimentsPage() {
   const [selectedRuns, setSelectedRuns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadExperiments = async () => {
+  const loadExperiments = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchApi<any[]>("/experiments");
       setExperiments(data);
-      if (data.length >= 2 && selectedRuns.length === 0) {
-        setSelectedRuns([data[0].id, data[1].id]);
+      if (data.length >= 2) {
+        setSelectedRuns((prev) =>
+          prev.length === 0 ? [data[0].id, data[1].id] : prev
+        );
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const loadComparison = async (runIds: string[]) => {
     if (runIds.length === 0) return;
@@ -38,7 +40,7 @@ export default function ExperimentsPage() {
 
   useEffect(() => {
     loadExperiments();
-  }, []);
+  }, [loadExperiments]);
 
   useEffect(() => {
     if (selectedRuns.length > 0) {

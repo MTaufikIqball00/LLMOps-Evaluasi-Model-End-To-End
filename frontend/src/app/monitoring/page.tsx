@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchApi } from "@/lib/api";
+import { API_BASE_URL, fetchApi } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TimeseriesChart } from "@/components/SimpleChart";
-import { MetricCard } from "@/components/MetricCard";
-import { Activity, ExternalLink, Radio, Zap, AlertCircle } from "lucide-react";
+import { Activity, ExternalLink, Radio, Zap } from "lucide-react";
 
 export default function MonitoringPage() {
   const [metrics, setMetrics] = useState<any>(null);
   const [distribution, setDistribution] = useState<any[]>([]);
   const [promStatus, setPromStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const grafanaUrl = process.env.NEXT_PUBLIC_GRAFANA_URL || "http://localhost:3310";
+  const metricsEndpoint = `${API_BASE_URL}/api/v1/metrics`;
 
   const loadData = async () => {
     try {
@@ -52,25 +54,31 @@ export default function MonitoringPage() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge
-            status={promStatus?.status || "Prometheus Exporter Standalone"}
+            status={
+              loading && !promStatus
+                ? "Checking Prometheus..."
+                : promStatus?.status || "Prometheus Exporter Standalone"
+            }
             size="md"
           />
         </div>
       </div>
 
       {/* Observability Source Notice */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs flex items-center justify-between">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
           <div>
             <span className="font-semibold text-white">Active Scrape Target: </span>
-            <span className="text-slate-400 font-mono">http://localhost:8210/api/v1/metrics</span>
+            <span className="text-slate-400 font-mono">{metricsEndpoint}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-slate-400">
-          <span>Port 9190 (Prometheus Target)</span>
+        <div className="flex flex-wrap items-center gap-2 text-slate-400">
+          <span className="font-mono text-indigo-300">
+            {metrics?.active_source || "Database Telemetry"}
+          </span>
           <span className="text-slate-600">|</span>
-          <span>Port 3310 (Grafana Target)</span>
+          <span>Port 9190 (Prometheus Target)</span>
         </div>
       </div>
 
@@ -87,7 +95,7 @@ export default function MonitoringPage() {
               <p className="text-xs text-slate-400">Target SLA: p95 &lt; 500ms</p>
             </div>
             <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
-              SLA Met (Nominal)
+              {metrics?.is_prometheus_live ? "PromQL Live" : "SQL Trace Window"}
             </span>
           </div>
           {metrics && (
@@ -172,7 +180,7 @@ export default function MonitoringPage() {
             <div className="mt-4 p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-xs space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Grafana URL:</span>
-                <span className="font-mono text-indigo-400">http://localhost:3310</span>
+                <span className="font-mono text-indigo-400">{grafanaUrl}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Provisioned Dashboard:</span>
@@ -188,12 +196,12 @@ export default function MonitoringPage() {
           <div className="pt-4 border-t border-slate-800 mt-4 flex items-center justify-between">
             <span className="text-xs text-slate-400">Launch external dashboard:</span>
             <a
-              href="http://localhost:3310"
+              href={grafanaUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition"
             >
-              Open Grafana (3310)
+              Open Grafana
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>

@@ -15,6 +15,13 @@ pub struct AppConfig {
     pub github_token: Option<String>,
     pub github_repo: String,
     pub app_env: String,
+    pub admin_api_key: Option<String>,
+    pub request_timeout_secs: u64,
+    pub rate_limit_rpm: u32,
+    pub llm_gateway_upstream_url: String,
+    pub llm_gateway_api_key: Option<String>,
+    pub llm_judge_model: String,
+    pub alert_webhook_url: Option<String>,
 }
 
 impl AppConfig {
@@ -54,6 +61,38 @@ impl AppConfig {
 
         let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
 
+        let admin_api_key = env::var("ADMIN_API_KEY").ok().filter(|s| !s.is_empty());
+
+        let request_timeout_secs = env::var("REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(30);
+
+        let rate_limit_rpm = env::var("RATE_LIMIT_RPM")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(120);
+
+        let llm_gateway_upstream_url = env::var("LLM_GATEWAY_UPSTREAM_URL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| env::var("OPENAI_BASE_URL").ok().filter(|s| !s.is_empty()))
+            .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+
+        let llm_gateway_api_key = env::var("LLM_GATEWAY_API_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| env::var("OPENAI_API_KEY").ok().filter(|s| !s.is_empty()));
+
+        let llm_judge_model = env::var("LLM_JUDGE_MODEL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+        let alert_webhook_url = env::var("ALERT_WEBHOOK_URL").ok().filter(|s| !s.is_empty());
+
         Self {
             server_host,
             server_port,
@@ -67,6 +106,13 @@ impl AppConfig {
             github_token,
             github_repo,
             app_env,
+            admin_api_key,
+            request_timeout_secs,
+            rate_limit_rpm,
+            llm_gateway_upstream_url,
+            llm_gateway_api_key,
+            llm_judge_model,
+            alert_webhook_url,
         }
     }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Box, Plus, Tag, ArrowRight, CheckCircle, Database } from "lucide-react";
@@ -21,7 +21,7 @@ export default function ModelRegistryPage() {
     description: "",
   });
 
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
     try {
       setLoading(true);
       const url = stageFilter === "all" ? "/models" : `/models?stage=${stageFilter}`;
@@ -32,11 +32,11 @@ export default function ModelRegistryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [stageFilter]);
 
   useEffect(() => {
     loadModels();
-  }, [stageFilter]);
+  }, [loadModels]);
 
   const handleUpdateStage = async (id: string, currentStage: string) => {
     const nextStage =

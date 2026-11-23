@@ -1,6 +1,7 @@
 use crate::api::health::AppState;
 use crate::domain::{CreateExperimentRequest, Experiment};
 use crate::errors::AppError;
+use crate::persistence::adapt_sql;
 use axum::{
     extract::{Query, State},
     Json,
@@ -32,18 +33,29 @@ pub async fn list_experiments(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ExperimentListQuery>,
 ) -> Result<Json<Vec<Experiment>>, AppError> {
-    let mut qb = sqlx::QueryBuilder::new("SELECT * FROM experiments WHERE 1=1");
+    let mut clauses = Vec::new();
+    if query.model_id.is_some() {
+        clauses.push("AND model_id = ?");
+    }
+    if query.framework.is_some() {
+        clauses.push("AND LOWER(framework) LIKE LOWER(?)");
+    }
+
+    let raw_sql = format!(
+        "SELECT * FROM experiments WHERE 1=1 {} ORDER BY created_at DESC",
+        clauses.join(" ")
+    );
+    let sql = adapt_sql(&raw_sql, state.is_postgres);
+
+    let mut q = sqlx::query_as::<_, Experiment>(&sql);
     if let Some(ref mid) = query.model_id {
-        qb.push(" AND model_id = ");
-        qb.push_bind(mid);
+        q = q.bind(mid);
     }
     if let Some(ref fw) = query.framework {
-        qb.push(" AND framework LIKE ");
-        qb.push_bind(format!("%{}%", fw));
+        q = q.bind(format!("%{fw}%"));
     }
-    qb.push(" ORDER BY created_at DESC");
 
-    let runs: Vec<Experiment> = qb.build_query_as().fetch_all(&state.pool).await?;
+    let runs = q.fetch_all(&state.pool).await?;
     Ok(Json(runs))
 }
 
@@ -67,25 +79,29 @@ pub async fn create_experiment(
         .map(|t| serde_json::to_string(&t).unwrap_or_default());
     let duration = payload.duration_seconds.unwrap_or(0);
 
-    sqlx::query(
+    let insert_sql = adapt_sql(
         r#"
         INSERT INTO experiments (
             id, name, model_id, framework, status, parameters, metrics, tags, duration_seconds, created_at
         ) VALUES (?, ?, ?, ?, 'Completed', ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        "#
-    )
-    .bind(&id)
-    .bind(&payload.name)
-    .bind(&payload.model_id)
-    .bind(&payload.framework)
-    .bind(&params_str)
-    .bind(&metrics_str)
-    .bind(&tags_str)
-    .bind(duration)
-    .execute(&state.pool)
-    .await?;
+        "#,
+        state.is_postgres,
+    );
 
-    let created: Experiment = sqlx::query_as("SELECT * FROM experiments WHERE id = ?")
+    sqlx::query(&insert_sql)
+        .bind(&id)
+        .bind(&payload.name)
+        .bind(&payload.model_id)
+        .bind(&payload.framework)
+        .bind(&params_str)
+        .bind(&metrics_str)
+        .bind(&tags_str)
+        .bind(duration)
+        .execute(&state.pool)
+        .await?;
+
+    let fetch_sql = adapt_sql("SELECT * FROM experiments WHERE id = ?", state.is_postgres);
+    let created: Experiment = sqlx::query_as(&fetch_sql)
         .bind(&id)
         .fetch_one(&state.pool)
         .await?;
@@ -110,15 +126,14 @@ pub async fn compare_experiments(
             .fetch_all(&state.pool)
             .await?
     } else {
-        let mut qb = sqlx::QueryBuilder::new("SELECT * FROM experiments WHERE id IN (");
-        let mut separated = qb.separated(", ");
+        let placeholders = vec!["?"; runs_list.len()].join(", ");
+        let raw_sql = format!("SELECT * FROM experiments WHERE id IN ({placeholders})");
+        let sql = adapt_sql(&raw_sql, state.is_postgres);
+        let mut q = sqlx::query_as::<_, Experiment>(&sql);
         for id in &runs_list {
-            separated.push_bind(id);
+            q = q.bind(id);
         }
-        separated.push_unseparated(")");
-        qb.build_query_as::<Experiment>()
-            .fetch_all(&state.pool)
-            .await?
+        q.fetch_all(&state.pool).await?
     };
 
     let mut param_keys = std::collections::BTreeSet::new();

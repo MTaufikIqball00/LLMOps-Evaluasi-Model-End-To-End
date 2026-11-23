@@ -9,7 +9,7 @@ pub async fn check_status() -> IntegrationStatusReport {
         status: "Connected (Native Engine Active)".to_string(),
         endpoint_url: Some("local://native-rust-evaluator/ragas".to_string()),
         latency_ms: Some(1.2),
-        message: "Native Rust Ragas metric runner ready (Faithfulness, Relevance, Precision, Recall). External Python worker optional.".to_string(),
+        message: "Native Rust Ragas metric runner ready (Faithfulness, Relevance, Precision, Recall, Composite Hallucination Index). External LLM Judge optional.".to_string(),
         is_configured: true,
         last_checked: Some(chrono::Utc::now().to_rfc3339()),
     }
@@ -23,6 +23,18 @@ pub struct EvaluationResult {
     pub groundedness: f64,
     pub hallucination_score: f64,
     pub hallucination_detected: bool,
+}
+
+/// Computes the documented composite Hallucination Index:
+/// `1.0 - (0.40 * Faithfulness + 0.35 * Groundedness + 0.25 * Context Precision)`
+pub fn compute_hallucination_index(
+    faithfulness: f64,
+    groundedness: f64,
+    context_precision: f64,
+) -> f64 {
+    let composite = 0.40 * faithfulness + 0.35 * groundedness + 0.25 * context_precision;
+    let index = (1.0 - composite).clamp(0.0, 1.0);
+    (index * 1000.0).round() / 1000.0
 }
 
 fn tokenize_words(text: &str) -> HashSet<String> {
@@ -90,15 +102,22 @@ pub fn evaluate_sample(
         _ => (0.85, 0.85, 0.80, 0.80),
     };
 
-    let hallucination_score = ((1.0 - faithfulness) * 100.0).round() / 100.0;
-    let hallucination_detected = hallucination_score > 0.35;
+    let faithfulness_r = (faithfulness * 1000.0).round() / 1000.0;
+    let relevance_r = (relevance * 1000.0).round() / 1000.0;
+    let ctx_prec_r = (ctx_prec * 1000.0).round() / 1000.0;
+    let ctx_rec_r = (ctx_rec * 1000.0).round() / 1000.0;
+    let groundedness_r = (groundedness * 1000.0).round() / 1000.0;
+
+    let hallucination_score =
+        compute_hallucination_index(faithfulness_r, groundedness_r, ctx_prec_r);
+    let hallucination_detected = hallucination_score > 0.35 || groundedness_r < 0.75;
 
     EvaluationResult {
-        faithfulness: (faithfulness * 1000.0).round() / 1000.0,
-        relevance: (relevance * 1000.0).round() / 1000.0,
-        context_precision: (ctx_prec * 1000.0).round() / 1000.0,
-        context_recall: (ctx_rec * 1000.0).round() / 1000.0,
-        groundedness: (groundedness * 1000.0).round() / 1000.0,
+        faithfulness: faithfulness_r,
+        relevance: relevance_r,
+        context_precision: ctx_prec_r,
+        context_recall: ctx_rec_r,
+        groundedness: groundedness_r,
         hallucination_score,
         hallucination_detected,
     }

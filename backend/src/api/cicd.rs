@@ -1,8 +1,10 @@
 use crate::api::health::AppState;
 use crate::domain::{CicdWorkflow, TriggerWorkflowRequest};
 use crate::errors::AppError;
+use crate::persistence::adapt_sql;
 use axum::{extract::State, Json};
 use std::sync::Arc;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 pub async fn list_workflows(
@@ -30,36 +32,103 @@ pub async fn trigger_workflow(
     );
     let run_id = format!("gh-{}", chrono::Utc::now().format("%Y%m%d%H%M"));
     let branch = payload.branch.unwrap_or_else(|| "main".to_string());
+    let workflow_file = payload
+        .workflow_file
+        .unwrap_or_else(|| "ci.yml".to_string());
     let commit_sha = md5::compute(Uuid::new_v4().as_bytes())
         .chars()
         .take(7)
         .collect::<String>();
 
-    sqlx::query(
+    let mut status = "Success".to_string();
+    let mut trigger_event = "manual_dispatch".to_string();
+    let mut commit_message = format!("Manual dispatch: execute {}", payload.workflow_name);
+    let mut url = format!(
+        "https://github.com/{}/actions/runs/{}",
+        state.github_repo, run_id
+    );
+
+    // If GITHUB_TOKEN is configured, dispatch real GitHub Actions workflow_dispatch API
+    if let Some(ref token) = state.github_token {
+        let api_url = format!(
+            "https://api.github.com/repos/{}/actions/workflows/{}/dispatches",
+            state.github_repo, workflow_file
+        );
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap_or_default();
+
+        match client
+            .post(&api_url)
+            .header("User-Agent", "LLMOps-Control-Center")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(token)
+            .json(&serde_json::json!({ "ref": branch }))
+            .send()
+            .await
+        {
+            Ok(res) if res.status().is_success() || res.status().as_u16() == 204 => {
+                info!(
+                    "Dispatched real GitHub Actions workflow '{}' on {}:{}",
+                    workflow_file, state.github_repo, branch
+                );
+                status = "Queued (GitHub API)".to_string();
+                trigger_event = "github_workflow_dispatch".to_string();
+                commit_message = format!(
+                    "GitHub Actions dispatch ({}): {}",
+                    workflow_file, payload.workflow_name
+                );
+                url = format!("https://github.com/{}/actions", state.github_repo);
+            }
+            Ok(res) => {
+                warn!(
+                    "GitHub workflow_dispatch returned HTTP {}, recorded fallback local dispatch",
+                    res.status()
+                );
+                commit_message = format!(
+                    "Fallback local dispatch (GitHub HTTP {}): {}",
+                    res.status(),
+                    payload.workflow_name
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "GitHub workflow_dispatch request failed ({}), recorded fallback local dispatch",
+                    e
+                );
+            }
+        }
+    }
+
+    let insert_sql = adapt_sql(
         r#"
         INSERT INTO cicd_workflows (
             id, workflow_name, run_id, branch, commit_sha, commit_message,
             status, trigger_event, duration_seconds, url, started_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'Success', 'manual_dispatch', 45, ?, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 45, ?, CURRENT_TIMESTAMP)
         "#,
-    )
-    .bind(&id)
-    .bind(&payload.workflow_name)
-    .bind(&run_id)
-    .bind(&branch)
-    .bind(&commit_sha)
-    .bind(format!(
-        "Manual dispatch: execute {}",
-        payload.workflow_name
-    ))
-    .bind(format!(
-        "https://github.com/{}/actions/runs/{}",
-        state.github_repo, run_id
-    ))
-    .execute(&state.pool)
-    .await?;
+        state.is_postgres,
+    );
 
-    let created: CicdWorkflow = sqlx::query_as("SELECT * FROM cicd_workflows WHERE id = ?")
+    sqlx::query(&insert_sql)
+        .bind(&id)
+        .bind(&payload.workflow_name)
+        .bind(&run_id)
+        .bind(&branch)
+        .bind(&commit_sha)
+        .bind(&commit_message)
+        .bind(&status)
+        .bind(&trigger_event)
+        .bind(&url)
+        .execute(&state.pool)
+        .await?;
+
+    let fetch_sql = adapt_sql(
+        "SELECT * FROM cicd_workflows WHERE id = ?",
+        state.is_postgres,
+    );
+    let created: CicdWorkflow = sqlx::query_as(&fetch_sql)
         .bind(&id)
         .fetch_one(&state.pool)
         .await?;

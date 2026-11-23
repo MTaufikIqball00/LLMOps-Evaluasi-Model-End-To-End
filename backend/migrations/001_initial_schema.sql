@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS models (
     artifact_uri TEXT,
     description TEXT,
     tags TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS experiments (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS experiments (
     metrics TEXT NOT NULL,
     tags TEXT,
     duration_seconds INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     avg_latency_ms REAL NOT NULL DEFAULT 0.0,
     total_tokens INTEGER NOT NULL DEFAULT 0,
     test_cases_count INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_test_cases (
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS evaluation_test_cases (
     hallucination_detected INTEGER NOT NULL DEFAULT 0,
     latency_ms REAL NOT NULL DEFAULT 0.0,
     tokens_used INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(evaluation_id) REFERENCES evaluations(id) ON DELETE CASCADE
 );
 
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS request_traces (
     redacted_completion TEXT,
     metadata TEXT,
     error_message TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS pricing_catalog (
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS pricing_catalog (
     model_pattern TEXT NOT NULL,
     prompt_cost_per_1k REAL NOT NULL,
     completion_cost_per_1k REAL NOT NULL,
-    last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    last_updated TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS budget_settings (
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS budget_settings (
     monthly_budget_usd REAL NOT NULL,
     alert_threshold_pct REAL NOT NULL,
     current_spend_usd REAL NOT NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS deployments (
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS deployments (
     image_tag TEXT NOT NULL,
     cpu_usage TEXT,
     memory_usage TEXT,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS cicd_workflows (
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS cicd_workflows (
     trigger_event TEXT NOT NULL,
     duration_seconds INTEGER NOT NULL,
     url TEXT,
-    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS integrations_config (
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS integrations_config (
     auth_token_masked TEXT,
     is_enabled INTEGER NOT NULL DEFAULT 1,
     last_status TEXT NOT NULL,
-    last_checked_at TIMESTAMP
+    last_checked_at TEXT
 );
 
 -- Indices for performance

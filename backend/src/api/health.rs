@@ -1,5 +1,6 @@
-use crate::observability::format_prometheus_metrics;
-use crate::persistence::DbPool;
+use crate::config::AppConfig;
+use crate::observability::{compute_latency_percentiles, format_prometheus_metrics};
+use crate::persistence::{is_postgres_url, DbPool};
 use axum::{
     extract::State,
     response::{IntoResponse, Response},
@@ -28,8 +29,10 @@ pub struct PortAllocations {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct AppState {
     pub pool: DbPool,
+    pub is_postgres: bool,
     pub start_time: Instant,
     pub server_port: u16,
     pub frontend_origin: String,
@@ -38,12 +41,70 @@ pub struct AppState {
     pub grafana_url: String,
     pub github_repo: String,
     pub github_token: Option<String>,
+    pub admin_api_key: Option<String>,
+    pub request_timeout_secs: u64,
+    pub rate_limit_rpm: u32,
+    pub llm_gateway_upstream_url: String,
+    pub llm_gateway_api_key: Option<String>,
+    pub llm_judge_model: String,
+    pub alert_webhook_url: Option<String>,
+}
+
+impl AppState {
+    pub fn from_config(pool: DbPool, config: &AppConfig, start_time: Instant) -> Self {
+        Self {
+            pool,
+            is_postgres: is_postgres_url(&config.database_url),
+            start_time,
+            server_port: config.server_port,
+            frontend_origin: config.frontend_origin.clone(),
+            mlflow_url: config.mlflow_url.clone(),
+            prometheus_url: config.prometheus_url.clone(),
+            grafana_url: config.grafana_url.clone(),
+            github_repo: config.github_repo.clone(),
+            github_token: config.github_token.clone(),
+            admin_api_key: config.admin_api_key.clone(),
+            request_timeout_secs: config.request_timeout_secs,
+            rate_limit_rpm: config.rate_limit_rpm,
+            llm_gateway_upstream_url: config.llm_gateway_upstream_url.clone(),
+            llm_gateway_api_key: config.llm_gateway_api_key.clone(),
+            llm_judge_model: config.llm_judge_model.clone(),
+            alert_webhook_url: config.alert_webhook_url.clone(),
+        }
+    }
+
+    pub fn for_test(pool: DbPool) -> Self {
+        Self {
+            pool,
+            is_postgres: false,
+            start_time: Instant::now(),
+            server_port: 0,
+            frontend_origin: "http://localhost:3210".to_string(),
+            mlflow_url: "http://localhost:5500".to_string(),
+            prometheus_url: "http://localhost:9190".to_string(),
+            grafana_url: "http://localhost:3310".to_string(),
+            github_repo: "enterprise/llmops-platform".to_string(),
+            github_token: None,
+            admin_api_key: None,
+            request_timeout_secs: 30,
+            rate_limit_rpm: 120,
+            llm_gateway_upstream_url: "https://api.openai.com/v1".to_string(),
+            llm_gateway_api_key: None,
+            llm_judge_model: "gpt-4o-mini".to_string(),
+            alert_webhook_url: None,
+        }
+    }
 }
 
 pub async fn health_check(State(state): State<std::sync::Arc<AppState>>) -> Json<HealthStatus> {
+    let engine = if state.is_postgres {
+        "PostgreSQL"
+    } else {
+        "SQLite (WAL)"
+    };
     let db_status = match sqlx::query("SELECT 1").execute(&state.pool).await {
-        Ok(_) => "Connected & Healthy".to_string(),
-        Err(e) => format!("Degraded: {e}"),
+        Ok(_) => format!("Connected & Healthy ({engine})"),
+        Err(e) => format!("Degraded ({engine}): {e}"),
     };
 
     Json(HealthStatus {
@@ -75,10 +136,10 @@ pub async fn prometheus_metrics(State(state): State<std::sync::Arc<AppState>>) -
             .unwrap_or((0,));
 
     let avg_faith: (f64,) =
-        sqlx::query_as("SELECT COALESCE(AVG(faithfulness), 0.94) FROM evaluations")
+        sqlx::query_as("SELECT COALESCE(AVG(faithfulness), 0.0) FROM evaluations")
             .fetch_one(&state.pool)
             .await
-            .unwrap_or((0.94,));
+            .unwrap_or((0.0,));
 
     let active_deps: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM deployments WHERE status = 'Healthy'")
@@ -86,11 +147,17 @@ pub async fn prometheus_metrics(State(state): State<std::sync::Arc<AppState>>) -
             .await
             .unwrap_or((0,));
 
+    let latency_rows: Vec<(f64,)> = sqlx::query_as("SELECT latency_ms FROM request_traces")
+        .fetch_all(&state.pool)
+        .await
+        .unwrap_or_default();
+    let pct = compute_latency_percentiles(latency_rows.into_iter().map(|r| r.0).collect());
+
     let metrics_text = format_prometheus_metrics(
         total_traces.0,
-        248.5,
-        410.2,
-        680.0,
+        pct.p50,
+        pct.p95,
+        pct.p99,
         token_sum.0,
         avg_faith.0,
         active_deps.0,

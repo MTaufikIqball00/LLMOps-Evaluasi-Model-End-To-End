@@ -1,9 +1,9 @@
 {
   "summary": {
-    "run_id": "QA-1793433699798",
-    "started_at": "2026-10-31T07:57:52.219Z",
-    "completed_at": "2026-10-31T08:01:39.797Z",
-    "duration_seconds": 228,
+    "run_id": "QA-1795420267942",
+    "started_at": "2026-11-23T07:48:29.086Z",
+    "completed_at": "2026-11-23T07:51:07.941Z",
+    "duration_seconds": 159,
     "execution_mode": "full",
     "total_tests": 21,
     "passed": 21,
@@ -21,9 +21,9 @@
       "suite": "api_endpoints_test",
       "category": "backend",
       "status": "PASS",
-      "duration_ms": 9152,
+      "duration_ms": 14480,
       "assertion": "cargo test exit code 0",
-      "evidence": "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.10s"
+      "evidence": "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s"
     },
     {
       "id": "RUST-database_integrity_test",
@@ -31,9 +31,9 @@
       "suite": "database_integrity_test",
       "category": "database",
       "status": "PASS",
-      "duration_ms": 2319,
+      "duration_ms": 9398,
       "assertion": "cargo test exit code 0",
-      "evidence": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s"
+      "evidence": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s"
     },
     {
       "id": "RUST-evaluation_engine_test",
@@ -41,7 +41,7 @@
       "suite": "evaluation_engine_test",
       "category": "evaluation",
       "status": "PASS",
-      "duration_ms": 1760,
+      "duration_ms": 5110,
       "assertion": "cargo test exit code 0",
       "evidence": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
     },
@@ -51,9 +51,9 @@
       "suite": "security_audit_test",
       "category": "security",
       "status": "PASS",
-      "duration_ms": 2106,
+      "duration_ms": 11626,
       "assertion": "cargo test exit code 0",
-      "evidence": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s"
+      "evidence": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s"
     },
     {
       "id": "RUST-performance_test",
@@ -61,9 +61,9 @@
       "suite": "performance_test",
       "category": "performance",
       "status": "PASS",
-      "duration_ms": 2171,
+      "duration_ms": 11435,
       "assertion": "cargo test exit code 0",
-      "evidence": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s"
+      "evidence": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s"
     },
     {
       "id": "RUST-integration_tests",
@@ -71,9 +71,9 @@
       "suite": "integration_tests",
       "category": "backend",
       "status": "PASS",
-      "duration_ms": 1869,
+      "duration_ms": 6041,
       "assertion": "cargo test exit code 0",
-      "evidence": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s"
+      "evidence": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
     },
     {
       "id": "E2E-01_overview.spec.ts",
@@ -81,9 +81,9 @@
       "suite": "01_overview.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 7640,
+      "duration_ms": 7506,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (5.2s)"
+      "evidence": "  1 passed (5.5s)"
     },
     {
       "id": "E2E-02_models.spec.ts",
@@ -91,9 +91,9 @@
       "suite": "02_models.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 11641,
+      "duration_ms": 9009,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  2 passed (8.8s)"
+      "evidence": "  2 passed (7.0s)"
     },
     {
       "id": "E2E-03_experiments.spec.ts",
@@ -101,9 +101,9 @@
       "suite": "03_experiments.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 7148,
+      "duration_ms": 6384,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (4.8s)"
+      "evidence": "  1 passed (4.4s)"
     },
     {
       "id": "E2E-04_evaluations.spec.ts",
@@ -111,9 +111,9 @@
       "suite": "04_evaluations.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 9371,
+      "duration_ms": 6966,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (6.8s)"
+      "evidence": "  1 passed (5.0s)"
     },
     {
       "id": "E2E-05_monitoring.spec.ts",
@@ -121,9 +121,9 @@
       "suite": "05_monitoring.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 8328,
+      "duration_ms": 7429,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (5.6s)"
+      "evidence": "  1 passed (5.3s)"
     },
     {
       "id": "E2E-06_traces.spec.ts",
@@ -131,9 +131,9 @@
       "suite": "06_traces.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 11980,
+      "duration_ms": 6390,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (9.3s)"
+      "evidence": "  1 passed (4.4s)"
     },
     {
       "id": "E2E-07_costs.spec.ts",
@@ -141,9 +141,9 @@
       "suite": "07_costs.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 13156,
+      "duration_ms": 6274,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (10.4s)"
+      "evidence": "  1 passed (4.3s)"
     },
     {
       "id": "E2E-08_deployments.spec.ts",
@@ -151,9 +151,9 @@
       "suite": "08_deployments.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 15711,
+      "duration_ms": 7253,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (12.5s)"
+      "evidence": "  1 passed (5.2s)"
     },
     {
       "id": "E2E-09_cicd.spec.ts",
@@ -161,9 +161,9 @@
       "suite": "09_cicd.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 16771,
+      "duration_ms": 6617,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (13.2s)"
+      "evidence": "  1 passed (4.6s)"
     },
     {
       "id": "E2E-10_integrations.spec.ts",
@@ -171,9 +171,9 @@
       "suite": "10_integrations.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 16284,
+      "duration_ms": 9441,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (12.8s)"
+      "evidence": "  1 passed (7.3s)"
     },
     {
       "id": "E2E-11_system.spec.ts",
@@ -181,9 +181,9 @@
       "suite": "11_system.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 9860,
+      "duration_ms": 5936,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (6.9s)"
+      "evidence": "  1 passed (3.9s)"
     },
     {
       "id": "E2E-12_navigation_resilience.spec.ts",
@@ -191,9 +191,9 @@
       "suite": "12_navigation_resilience.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 59531,
+      "duration_ms": 14376,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  2 passed (56.0s)"
+      "evidence": "  2 passed (11.8s)"
     },
     {
       "id": "E2E-13_qa_dashboard.spec.ts",
@@ -201,9 +201,9 @@
       "suite": "13_qa_dashboard.spec.ts",
       "category": "frontend",
       "status": "PASS",
-      "duration_ms": 20038,
+      "duration_ms": 6653,
       "assertion": "Playwright DOM expectations and zero console error",
-      "evidence": "  1 passed (15.5s)"
+      "evidence": "  1 passed (4.6s)"
     },
     {
       "id": "PROBE-BACKEND-HEALTH",
@@ -211,9 +211,9 @@
       "suite": "Live Service Probes",
       "category": "smoke",
       "status": "PASS",
-      "duration_ms": 480,
+      "duration_ms": 383,
       "assertion": "Status is Healthy",
-      "evidence": "{\"status\":\"Healthy\",\"version\":\"0.1.0\",\"database\":\"Connected & Healthy\",\"uptime_seconds\":1665,\"allocated_ports\":{\"backend_api\":8210,\"frontend_ui\":3210,\"prometheus_target\":9190,\"grafana_target\":3310,\"mlflow_target\":5500},\"timestamp\":\"2026-10-31T08:01:39.503980200+00:00\"}"
+      "evidence": "{\"status\":\"Healthy\",\"version\":\"0.1.0\",\"database\":\"Connected & Healthy (SQLite (WAL))\",\"uptime_seconds\":161,\"allocated_ports\":{\"backend_api\":8210,\"frontend_ui\":3210,\"prometheus_target\":9190,\"grafana_target\":3310,\"mlflow_target\":5500},\"timestamp\":\"2026-11-23T07:51:07.780052800+00:00\"}"
     },
     {
       "id": "PROBE-FRONTEND-STATUS",
@@ -221,7 +221,7 @@
       "suite": "Live Service Probes",
       "category": "smoke",
       "status": "PASS",
-      "duration_ms": 257,
+      "duration_ms": 147,
       "assertion": "HTTP Status 200 OK",
       "evidence": "HTTP Status Code: 200"
     }
@@ -232,12 +232,12 @@
       "title": "Secret Scrubber Regex Hyphen Leak (sk-proj-... / sk-ant-...)",
       "severity": "HIGH",
       "category": "Security / Token Sanitization",
-      "status": "OPEN",
+      "status": "RESOLVED",
       "file_path": "backend/src/observability/mod.rs",
-      "line_number": 62,
-      "description": "Regex `(?i)(sk-[a-zA-Z0-9]{20,})` does not match hyphens, leaving modern project keys unredacted.",
-      "evidence": "security_audit_test.rs::test_modern_project_key_vulnerability_probe confirmed token persistence",
-      "impact": "Exposure of modern OpenAI and Anthropic project credentials in logs and database.",
+      "line_number": 11,
+      "description": "Regex updated to `(?i)(sk-[a-zA-Z0-9_-]{20,})` and scrubbing enforced on error_message and metadata in create_trace.",
+      "evidence": "security_audit_test.rs::test_modern_project_key_vulnerability_probe & test_trace_redacts_error_message_and_metadata pass",
+      "impact": "All modern OpenAI/Anthropic keys, GitHub PATs, Slack/HF/AWS tokens are redacted before persistence.",
       "cve_or_cwe": "CWE-312: Cleartext Storage of Sensitive Information"
     },
     {
@@ -245,12 +245,12 @@
       "title": "Hallucination Index Formula Divergence Between Spec and Code",
       "severity": "MEDIUM",
       "category": "LLM Evaluation & Ragas",
-      "status": "OPEN",
+      "status": "RESOLVED",
       "file_path": "backend/src/integrations/ragas.rs",
-      "line_number": 107,
-      "description": "Implementation uses `1.0 - Faithfulness` instead of weighted formula `1.0 - (0.40*F + 0.35*G + 0.25*CP)`.",
-      "evidence": "evaluation_engine_test.rs::test_hallucination_index_formula_divergence_audit confirmed calculation gap",
-      "impact": "Low groundedness answers do not trigger hallucination alerts if faithfulness is high.",
+      "line_number": 30,
+      "description": "Aligned to composite weighted formula `1.0 - (0.40*F + 0.35*G + 0.25*CP)` and groundedness < 0.75 alert guard.",
+      "evidence": "evaluation_engine_test.rs::test_hallucination_index_formula_divergence_audit verifies exact alignment",
+      "impact": "Low groundedness answers accurately trigger hallucination alerts.",
       "cve_or_cwe": "CWE-684: Incorrect Provision of Specified Functionality"
     },
     {
@@ -258,12 +258,12 @@
       "title": "Documented API Route Prefixing Mismatch (/api/* vs /api/v1/*)",
       "severity": "LOW",
       "category": "API Architecture & Documentation",
-      "status": "OPEN",
+      "status": "RESOLVED",
       "file_path": "backend/src/api/mod.rs",
-      "line_number": 25,
-      "description": "Axum router prefixes all endpoints under `/api/v1/*` while docs state `/api/*`.",
-      "evidence": "Direct HTTP GET on http://localhost:8210/api/models returned 404",
-      "impact": "External integrations expecting unversioned /api/* will encounter 404 Not Found.",
+      "line_number": 139,
+      "description": "README.md, .env.example, and OpenAPI 3.1.0 spec synchronized with /api/v1/* routes and new env vars.",
+      "evidence": "api_endpoints_test.rs::test_openapi_and_swagger_endpoints validates live OpenAPI spec & Swagger UI",
+      "impact": "All external docs and specs align 100% with Axum routes.",
       "cve_or_cwe": "Architecture Documentation Drift"
     }
   ],
@@ -376,7 +376,7 @@
       "feature_id": "FEAT-001",
       "feature_name": "Overview Dashboard & Aggregated KPIs",
       "frontend_route": "/",
-      "backend_endpoint": "/api/v1/metrics/summary",
+      "backend_endpoint": "/api/v1/overview/stats",
       "database_entities": [
         "models",
         "experiments",
@@ -389,7 +389,7 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Renders 4 KPI cards, rolling latency trend, requests chart, active deployments, and model registry summary."
+      "notes": "Computes real p50/p95/p99 latency percentiles directly from persisted request_traces and displays live spend/token telemetry."
     },
     {
       "feature_id": "FEAT-002",
@@ -404,7 +404,7 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Supports model registration, parameter validation, artifact URI storage, stage filtering, and promotion."
+      "notes": "Supports model registration, parameter validation, artifact URI storage, stage filtering, and lifecycle promotion."
     },
     {
       "feature_id": "FEAT-003",
@@ -435,7 +435,7 @@
         "backend::evaluation_engine_test"
       ],
       "verification_status": "PASS",
-      "notes": "Evaluates Ragas/TruLens metrics (Faithfulness, Groundedness, Context Precision, Hallucination Index). Code diverges from documented formula."
+      "notes": "Uses composite weighted Hallucination Index formula (0.40*F + 0.35*G + 0.25*CP) with optional LLM-as-a-Judge."
     },
     {
       "feature_id": "FEAT-005",
@@ -450,7 +450,7 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Timeseries latency percentiles (p50, p95, p99), RPM throughput, latency histogram, and Prometheus exporter status."
+      "notes": "Queries live Prometheus PromQL when reachable or builds real trace-bucketed rolling series; Grafana URL configurable via env."
     },
     {
       "feature_id": "FEAT-006",
@@ -465,7 +465,7 @@
         "backend::security_audit_test"
       ],
       "verification_status": "PASS",
-      "notes": "Waterfall span tree, payload viewer, and secret scrubbing. Scrubber vulnerability identified on modern project keys."
+      "notes": "Redacts modern hyphenated keys (sk-proj-*, sk-ant-*), AWS, HF, Slack, GitHub PATs across prompt, completion, error_message, and metadata."
     },
     {
       "feature_id": "FEAT-007",
@@ -481,7 +481,7 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Calculates monthly spend, provider breakdown, budget caps, alert threshold triggers, and dynamic budget updates."
+      "notes": "Looks up dynamic pricing_catalog rates on trace ingestion and atomically increments budget_settings.current_spend_usd."
     },
     {
       "feature_id": "FEAT-008",
@@ -511,13 +511,13 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Workflow run history, commit SHAs, status tracking, and manual workflow dispatch trigger."
+      "notes": "Integrates live GitHub Actions workflow_dispatch API when GITHUB_TOKEN is set with local fallback."
     },
     {
       "feature_id": "FEAT-010",
       "feature_name": "Integrations Hub & Health Probes",
       "frontend_route": "/integrations",
-      "backend_endpoint": "/api/v1/integrations/status",
+      "backend_endpoint": "/api/v1/integrations",
       "database_entities": [
         "integrations_config"
       ],
@@ -526,7 +526,7 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Manages 8 external adapters (Prometheus, Grafana, MLflow, W&B, Kubernetes, OpenAI, Hugging Face, GitHub Actions)."
+      "notes": "Manages 8 external adapters (Prometheus, Grafana, MLflow, W&B, Kubernetes, Ragas, TruLens, GitHub Actions)."
     },
     {
       "feature_id": "FEAT-011",
@@ -541,7 +541,65 @@
         "backend::api_endpoints_test"
       ],
       "verification_status": "PASS",
-      "notes": "Uptime, DB connection check, port allocations registry (8210, 3210, 9190, 3310), memory usage, and security controls."
+      "notes": "Reports SQLite WAL / PostgreSQL connectivity, uptime, port registry, API key auth, rate limiting, and timeout posture."
+    },
+    {
+      "feature_id": "FEAT-012",
+      "feature_name": "Prompt Registry & A/B Template Diffing",
+      "frontend_route": "/prompts",
+      "backend_endpoint": "/api/v1/prompts",
+      "database_entities": [
+        "prompts"
+      ],
+      "test_suites": [
+        "backend::api_endpoints_test"
+      ],
+      "verification_status": "PASS",
+      "notes": "Versioned templates, automatic {{variable}} detection, stage lifecycle, and A/B line diffing."
+    },
+    {
+      "feature_id": "FEAT-013",
+      "feature_name": "Alerting Rules & Webhook Notifier",
+      "frontend_route": "/alerts",
+      "backend_endpoint": "/api/v1/alerts/rules",
+      "database_entities": [
+        "alert_rules",
+        "alert_events"
+      ],
+      "test_suites": [
+        "backend::api_endpoints_test"
+      ],
+      "verification_status": "PASS",
+      "notes": "Automated SLA guards for hallucination_score, latency_p95_ms, budget_used_pct, error_rate_pct with Slack/Discord webhooks."
+    },
+    {
+      "feature_id": "FEAT-014",
+      "feature_name": "OpenAI-Compatible AI Gateway",
+      "frontend_route": "/traces",
+      "backend_endpoint": "/api/v1/gateway/chat/completions",
+      "database_entities": [
+        "request_traces",
+        "pricing_catalog",
+        "budget_settings"
+      ],
+      "test_suites": [
+        "backend::api_endpoints_test"
+      ],
+      "verification_status": "PASS",
+      "notes": "Proxies OpenAI-compatible completions or local fallback with automatic scrubbing, trace persistence, and budget accounting."
+    },
+    {
+      "feature_id": "FEAT-015",
+      "feature_name": "OpenAPI 3.1 Spec & Swagger UI",
+      "frontend_route": "/qa",
+      "backend_endpoint": "/api/v1/docs",
+      "database_entities": [],
+      "test_suites": [
+        "backend::api_endpoints_test",
+        "frontend::13_qa_dashboard"
+      ],
+      "verification_status": "PASS",
+      "notes": "Serves interactive Swagger UI at /api/v1/docs and OpenAPI 3.1.0 schema at /api/v1/openapi.json."
     }
   ]
 }

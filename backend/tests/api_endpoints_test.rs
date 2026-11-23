@@ -2,7 +2,6 @@ use axum::http::StatusCode;
 use llmops_backend::{api, domain::*, persistence};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
@@ -25,17 +24,7 @@ impl TestApp {
             .await
             .expect("Failed to initialize test SQLite database");
 
-        let state = Arc::new(api::health::AppState {
-            pool: pool.clone(),
-            start_time: Instant::now(),
-            server_port: 0,
-            frontend_origin: "http://localhost:3210".to_string(),
-            mlflow_url: "http://localhost:5500".to_string(),
-            prometheus_url: "http://localhost:9190".to_string(),
-            grafana_url: "http://localhost:3310".to_string(),
-            github_repo: "enterprise/llmops-platform".to_string(),
-            github_token: None,
-        });
+        let state = Arc::new(api::health::AppState::for_test(pool.clone()));
 
         let app = api::build_router(state);
 
@@ -590,4 +579,283 @@ async fn test_integrations_probe_hub() {
         .await
         .unwrap();
     assert_eq!(res_update.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_real_percentiles_and_pricing_budget_ledger() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    // Baseline budget spend before trace ingestion
+    let before_costs: Value = client
+        .get(format!("{}/api/v1/costs/summary", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let spend_before = before_costs["budget"]["current_spend_usd"]
+        .as_f64()
+        .unwrap();
+
+    // Ingest trace matching pricing_catalog 'gpt-4o' ($0.0025 / 1k input, $0.0100 / 1k output)
+    let res_trace = client
+        .post(format!("{}/api/v1/traces", app.base_url))
+        .json(&json!({
+            "span_name": "pricing_ledger_test",
+            "model_name": "gpt-4o",
+            "provider": "OpenAI",
+            "status_code": 200,
+            "latency_ms": 950.0,
+            "prompt_tokens": 1000,
+            "completion_tokens": 500,
+            "prompt": "Calculate pricing accurately",
+            "completion": "Done",
+            "metadata": { "tier": "test" },
+            "error_message": null
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_trace.status(), StatusCode::OK);
+    let created: RequestTrace = res_trace.json().await.unwrap();
+    // Expected cost: (1000/1000)*0.0025 + (500/1000)*0.0100 = 0.0075
+    assert!((created.estimated_cost - 0.0075).abs() < 0.0001);
+
+    let after_costs: Value = client
+        .get(format!("{}/api/v1/costs/summary", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let spend_after = after_costs["budget"]["current_spend_usd"].as_f64().unwrap();
+    assert!(((spend_after - spend_before) - 0.0075).abs() < 0.001);
+
+    // Check real latency percentiles from overview & monitoring
+    let overview: Value = client
+        .get(format!("{}/api/v1/overview/stats", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        overview["latency"]["p99_ms"].as_f64().unwrap()
+            >= overview["latency"]["p50_ms"].as_f64().unwrap()
+    );
+
+    let monitoring: Value = client
+        .get(format!("{}/api/v1/monitoring/metrics", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(monitoring["timestamps"].as_array().unwrap().len(), 12);
+    assert!(monitoring["active_source"]
+        .as_str()
+        .unwrap()
+        .contains("Live Database Telemetry"));
+}
+
+#[tokio::test]
+async fn test_gateway_chat_completions() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    let res = client
+        .post(format!("{}/api/v1/gateway/chat/completions", app.base_url))
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "messages": [
+                { "role": "user", "content": "Hello gateway, do not leak sk-proj-secret1234567890abcdef" }
+            ]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: Value = res.json().await.unwrap();
+    assert_eq!(body["object"], "chat.completion");
+    assert_eq!(body["mode"], "local_fallback");
+    let trace_id = body["trace_id"].as_str().unwrap();
+
+    // Confirm trace persisted with secret scrubbed
+    let trace: RequestTrace = client
+        .get(format!("{}/api/v1/traces/{}", app.base_url, trace_id))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!trace
+        .redacted_prompt
+        .unwrap()
+        .contains("sk-proj-secret1234567890abcdef"));
+}
+
+#[tokio::test]
+async fn test_prompt_registry_and_ab_diff() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    // 1. List seeded prompts
+    let list: Vec<Value> = client
+        .get(format!("{}/api/v1/prompts", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(list.len() >= 3);
+
+    // 2. Compare seeded RAG v1 vs v2
+    let compare: Value = client
+        .get(format!(
+            "{}/api/v1/prompts/compare?a=prm-rag-v1&b=prm-rag-v2",
+            app.base_url
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(compare["faithfulness_delta"].as_f64().unwrap() > 0.0);
+    assert!(!compare["diff_lines"].as_array().unwrap().is_empty());
+
+    // 3. Create, update stage, and delete prompt
+    let created: Value = client
+        .post(format!("{}/api/v1/prompts", app.base_url))
+        .json(&json!({
+            "name": "Audit Summarizer Prompt",
+            "version": "v1.0.0",
+            "template": "Summarize {{document}} for {{audience}}.",
+            "model_target": "Llama-3.1-70B-Instruct",
+            "stage": "Draft",
+            "tags": ["audit"]
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().unwrap();
+    assert!(created["variables"].as_str().unwrap().contains("document"));
+    assert!(created["variables"].as_str().unwrap().contains("audience"));
+
+    let updated: Value = client
+        .patch(format!("{}/api/v1/prompts/{}", app.base_url, id))
+        .json(&json!({ "stage": "Staging" }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(updated["stage"], "Staging");
+
+    let del_res = client
+        .delete(format!("{}/api/v1/prompts/{}", app.base_url, id))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(del_res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_alert_rules_and_evaluation_engine() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    // 1. Create custom rule that will definitely trigger on seeded traces (latency_p95_ms > 100)
+    let rule: Value = client
+        .post(format!("{}/api/v1/alerts/rules", app.base_url))
+        .json(&json!({
+            "name": "Strict Latency Guard Test",
+            "metric_type": "latency_p95_ms",
+            "operator": "gt",
+            "threshold": 100.0,
+            "severity": "High",
+            "channel_type": "slack"
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rule_id = rule["id"].as_str().unwrap();
+
+    // 2. Evaluate rules now
+    let triggered: Vec<Value> = client
+        .post(format!("{}/api/v1/alerts/evaluate", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(triggered.iter().any(|e| e["rule_id"] == rule_id));
+
+    // 3. Test dry-run webhook endpoint
+    let test_ping: Value = client
+        .post(format!(
+            "{}/api/v1/alerts/rules/{}/test",
+            app.base_url, rule_id
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(test_ping["rule_id"], rule_id);
+
+    // 4. Verify event history populated
+    let events: Vec<Value> = client
+        .get(format!("{}/api/v1/alerts/events", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!events.is_empty());
+}
+
+#[tokio::test]
+async fn test_openapi_and_swagger_endpoints() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    let spec: Value = client
+        .get(format!("{}/api/v1/openapi.json", app.base_url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(spec["openapi"], "3.1.0");
+    assert!(spec["paths"]["/prompts"].is_object());
+    assert!(spec["paths"]["/alerts/rules"].is_object());
+    assert!(spec["paths"]["/gateway/chat/completions"].is_object());
+
+    let docs_res = client
+        .get(format!("{}/api/v1/docs", app.base_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(docs_res.status(), StatusCode::OK);
+    let html = docs_res.text().await.unwrap();
+    assert!(html.contains("SwaggerUIBundle"));
 }

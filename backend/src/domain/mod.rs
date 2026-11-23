@@ -103,9 +103,10 @@ pub struct CreateEvaluationRequest {
     pub dataset_name: String,
     pub evaluator_framework: String,
     pub sample_test_cases: Option<Vec<CreateTestCaseInput>>,
+    pub use_llm_judge: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateTestCaseInput {
     pub question: String,
     pub ground_truth: Option<String>,
@@ -209,6 +210,7 @@ pub struct CicdWorkflow {
 pub struct TriggerWorkflowRequest {
     pub workflow_name: String,
     pub branch: Option<String>,
+    pub workflow_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -241,4 +243,164 @@ pub struct IntegrationStatusReport {
     pub message: String,
     pub is_configured: bool,
     pub last_checked: Option<String>,
+}
+
+// ============================================================================
+// Prompt Registry & A/B Comparison Domain Types
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PromptTemplate {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub version: String,
+    pub template: String,
+    pub variables: Option<String>,
+    pub model_target: String,
+    pub stage: String,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub avg_faithfulness: f64,
+    pub avg_latency_ms: f64,
+    pub usage_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreatePromptRequest {
+    pub name: String,
+    pub slug: Option<String>,
+    pub version: String,
+    pub template: String,
+    pub model_target: String,
+    pub stage: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePromptRequest {
+    pub stage: Option<String>,
+    pub template: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PromptDiffLine {
+    pub line_number: usize,
+    pub change_type: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PromptCompareResponse {
+    pub prompt_a: PromptTemplate,
+    pub prompt_b: PromptTemplate,
+    pub shared_variables: Vec<String>,
+    pub added_variables: Vec<String>,
+    pub removed_variables: Vec<String>,
+    pub faithfulness_delta: f64,
+    pub latency_delta_ms: f64,
+    pub diff_lines: Vec<PromptDiffLine>,
+}
+
+// ============================================================================
+// Alerting Rules & Webhook Events Domain Types
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AlertRule {
+    pub id: String,
+    pub name: String,
+    pub metric_type: String,
+    pub operator: String,
+    pub threshold: f64,
+    pub severity: String,
+    pub webhook_url: Option<String>,
+    pub channel_type: String,
+    pub is_enabled: i64,
+    pub last_triggered_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateAlertRuleRequest {
+    pub name: String,
+    pub metric_type: String,
+    pub operator: Option<String>,
+    pub threshold: f64,
+    pub severity: Option<String>,
+    pub webhook_url: Option<String>,
+    pub channel_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateAlertRuleRequest {
+    pub is_enabled: Option<bool>,
+    pub threshold: Option<f64>,
+    pub webhook_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AlertEvent {
+    pub id: String,
+    pub rule_id: String,
+    pub rule_name: String,
+    pub metric_type: String,
+    pub observed_value: f64,
+    pub threshold: f64,
+    pub severity: String,
+    pub message: String,
+    pub delivery_status: String,
+    pub created_at: String,
+}
+
+// ============================================================================
+// AI Gateway OpenAI-Compatible Types
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GatewayMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GatewayChatRequest {
+    pub model: String,
+    pub messages: Vec<GatewayMessage>,
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<i64>,
+    pub provider: Option<String>,
+    pub upstream_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GatewayChoice {
+    pub index: i64,
+    pub message: GatewayMessage,
+    pub finish_reason: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GatewayUsage {
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GatewayChatResponse {
+    pub id: String,
+    pub object: String,
+    pub created: i64,
+    pub model: String,
+    pub mode: String,
+    pub choices: Vec<GatewayChoice>,
+    pub usage: GatewayUsage,
+    pub trace_id: String,
+    pub estimated_cost_usd: f64,
+    pub latency_ms: f64,
 }

@@ -1,6 +1,7 @@
 use crate::api::health::AppState;
 use crate::domain::{BudgetSetting, PricingEntry, UpdateBudgetRequest};
 use crate::errors::AppError;
+use crate::persistence::adapt_sql;
 use axum::{extract::State, Json};
 use serde::Serialize;
 use std::sync::Arc;
@@ -42,7 +43,7 @@ pub async fn get_cost_summary(
             id: "default-budget".to_string(),
             monthly_budget_usd: 2500.0,
             alert_threshold_pct: 80.0,
-            current_spend_usd: 1428.50,
+            current_spend_usd: 0.0,
             updated_at: chrono::Utc::now().to_rfc3339(),
         });
 
@@ -77,7 +78,7 @@ pub async fn get_cost_summary(
             ProviderCostItem {
                 provider: prov,
                 total_tokens: tokens,
-                estimated_cost_usd: (cost * 1000.0).round() / 1000.0,
+                estimated_cost_usd: (cost * 10000.0).round() / 10000.0,
                 percentage: (pct * 10.0).round() / 10.0,
             }
         })
@@ -107,7 +108,7 @@ pub async fn get_cost_summary(
             prompt_tokens: p_tok,
             completion_tokens: c_tok,
             total_tokens: tot_tok,
-            cost_usd: (cost * 1000.0).round() / 1000.0,
+            cost_usd: (cost * 10000.0).round() / 10000.0,
         })
         .collect();
 
@@ -148,17 +149,20 @@ pub async fn update_budget(
         ));
     }
 
-    sqlx::query(
+    let update_sql = adapt_sql(
         r#"
         UPDATE budget_settings
         SET monthly_budget_usd = ?, alert_threshold_pct = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = 'default-budget'
         "#,
-    )
-    .bind(payload.monthly_budget_usd)
-    .bind(payload.alert_threshold_pct)
-    .execute(&state.pool)
-    .await?;
+        state.is_postgres,
+    );
+
+    sqlx::query(&update_sql)
+        .bind(payload.monthly_budget_usd)
+        .bind(payload.alert_threshold_pct)
+        .execute(&state.pool)
+        .await?;
 
     let updated: BudgetSetting = sqlx::query_as("SELECT * FROM budget_settings LIMIT 1")
         .fetch_one(&state.pool)

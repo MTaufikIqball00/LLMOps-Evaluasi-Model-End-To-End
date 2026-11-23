@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   async rewrites() {
     // On Vercel without an external backend URL, let Next.js Route Handlers (/api/v1/[...slug]) handle requests natively
     if (process.env.VERCEL && !process.env.NEXT_PUBLIC_API_URL) {

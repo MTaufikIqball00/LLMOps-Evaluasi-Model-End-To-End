@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use llmops_backend::{api, observability::redact_secrets, persistence};
+use serde_json::json;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
@@ -12,6 +12,10 @@ struct SecurityTestApp {
 
 impl SecurityTestApp {
     async fn spawn() -> Self {
+        Self::spawn_with("http://localhost:3210,https://*.vercel.app", None).await
+    }
+
+    async fn spawn_with(frontend_origin: &str, admin_api_key: Option<String>) -> Self {
         let db_id = Uuid::new_v4().to_string();
         tokio::fs::create_dir_all("target/tmp/test_dbs").await.ok();
         let db_file = format!("target/tmp/test_dbs/sec_{}.db", db_id);
@@ -19,28 +23,12 @@ impl SecurityTestApp {
 
         let pool = persistence::init_db(&database_url).await.unwrap();
 
-        let state = Arc::new(api::health::AppState {
-            pool,
-            start_time: Instant::now(),
-            server_port: 0,
-            frontend_origin: "http://localhost:3210".to_string(),
-            mlflow_url: "http://localhost:5500".to_string(),
-            prometheus_url: "http://localhost:9190".to_string(),
-            grafana_url: "http://localhost:3310".to_string(),
-            github_repo: "enterprise/llmops-platform".to_string(),
-            github_token: None,
-        });
+        let mut raw_state = api::health::AppState::for_test(pool);
+        raw_state.frontend_origin = frontend_origin.to_string();
+        raw_state.admin_api_key = admin_api_key;
+        let state = Arc::new(raw_state);
 
-        let cors = tower_http::cors::CorsLayer::new()
-            .allow_origin(tower_http::cors::AllowOrigin::predicate(|origin, _| {
-                let s = origin.to_str().unwrap_or("");
-                s.starts_with("http://localhost:3210")
-                    || s.starts_with("http://127.0.0.1:3210")
-                    || s.starts_with("http://localhost:3000")
-            }))
-            .allow_methods(tower_http::cors::Any)
-            .allow_headers(tower_http::cors::Any);
-
+        let cors = api::build_cors_layer(frontend_origin);
         let app = api::build_router(state).layer(cors);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -65,7 +53,6 @@ async fn test_sql_injection_defense_in_query_builders() {
     let app = SecurityTestApp::spawn().await;
     let client = reqwest::Client::new();
 
-    // SQL Injection payload attempting to drop table or bypass filter
     let sqli_payloads = vec![
         "' OR '1'='1",
         "'; DROP TABLE models; --",
@@ -81,8 +68,6 @@ async fn test_sql_injection_defense_in_query_builders() {
         );
         let res = client.get(&url).send().await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
-        // If SQL injection succeeded, it would return all models or throw SQLite syntax error.
-        // With parameterized binding, it safely treats it as literal string and returns empty array.
         let models: Vec<serde_json::Value> = res.json().await.unwrap();
         assert!(
             models.is_empty(),
@@ -90,7 +75,6 @@ async fn test_sql_injection_defense_in_query_builders() {
         );
     }
 
-    // Verify models table is intact
     let check_res = client
         .get(format!("{}/api/v1/models", app.base_url))
         .send()
@@ -108,6 +92,8 @@ fn test_exhaustive_secret_scrubbing_patterns() {
     let test_cases = vec![
         ("sk-1234567890abcdef1234567890", "[REDACTED_SECRET]"),
         ("ghp_1234567890abcdefghijklmnopqrstuv", "[REDACTED_SECRET]"),
+        ("hf_1234567890abcdefghijklmnopqrstuv", "[REDACTED_SECRET]"),
+        ("AKIAIOSFODNN7EXAMPLE", "[REDACTED_SECRET]"),
         (
             "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
             "[REDACTED_SECRET]",
@@ -136,23 +122,63 @@ fn test_exhaustive_secret_scrubbing_patterns() {
 
 #[test]
 fn test_modern_project_key_vulnerability_probe() {
-    // Security audit finding: Modern OpenAI project-scoped keys (`sk-proj-...`)
-    // and Anthropic keys (`sk-ant-...`) contain hyphens in their payload.
-    // The current regex `sk-[a-zA-Z0-9]{20,}` fails to match hyphens, leaving modern keys unredacted!
-    let modern_openai_key = "sk-proj-99887766554433221100aabbccddeeff";
-    let text = format!("Bearer authorization token {}", modern_openai_key);
-    let sanitized = redact_secrets(&text);
+    // Verify hyphenated OpenAI (`sk-proj-...`) and Anthropic (`sk-ant-...`) keys are strictly scrubbed.
+    let modern_keys = [
+        "sk-proj-99887766554433221100aabbccddeeff",
+        "sk-ant-api03-11223344556677889900aabbccddeeff",
+    ];
 
-    // Document whether vulnerability is present in current release
-    let is_leaked = sanitized.contains(modern_openai_key);
-    println!(
-        "\n[SECURITY AUDIT EVIDENCE] Modern OpenAI project key 'sk-proj-...' leaked: {}",
-        is_leaked
-    );
-    assert!(
-        is_leaked,
-        "Vulnerability confirmed: current regex does not match hyphens in sk-proj-*"
-    );
+    for key in modern_keys {
+        let text = format!("Bearer authorization token {}", key);
+        let sanitized = redact_secrets(&text);
+        assert!(
+            !sanitized.contains(key),
+            "Modern hyphenated key '{}' must be completely scrubbed",
+            key
+        );
+        assert!(
+            sanitized.contains("[REDACTED_SECRET]"),
+            "Placeholder [REDACTED_SECRET] must replace '{}'",
+            key
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_trace_redacts_error_message_and_metadata() {
+    let app = SecurityTestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    let leaked_key = "sk-proj-errorleak99887766554433221100";
+    let leaked_gh = "ghp_metaSecretToken1234567890abcdef";
+
+    let res = client
+        .post(format!("{}/api/v1/traces", app.base_url))
+        .json(&json!({
+            "span_name": "scrub_all_fields_test",
+            "model_name": "gpt-4o",
+            "provider": "OpenAI",
+            "status_code": 500,
+            "latency_ms": 120.0,
+            "prompt_tokens": 100,
+            "completion_tokens": 0,
+            "prompt": "Normal prompt",
+            "completion": null,
+            "metadata": { "debug_token": leaked_gh },
+            "error_message": format!("Upstream rejected token {}", leaked_key)
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let trace: serde_json::Value = res.json().await.unwrap();
+
+    let err_msg = trace["error_message"].as_str().unwrap();
+    let meta = trace["metadata"].as_str().unwrap();
+    assert!(!err_msg.contains(leaked_key));
+    assert!(err_msg.contains("[REDACTED_SECRET]"));
+    assert!(!meta.contains(leaked_gh));
+    assert!(meta.contains("[REDACTED_SECRET]"));
 }
 
 #[tokio::test]
@@ -160,7 +186,7 @@ async fn test_cors_policy_enforcement() {
     let app = SecurityTestApp::spawn().await;
     let client = reqwest::Client::new();
 
-    // 1. Authorized Origin: http://localhost:3210
+    // 1. Authorized Local Origin
     let res_allowed = client
         .get(format!("{}/api/v1/health", app.base_url))
         .header("Origin", "http://localhost:3210")
@@ -169,27 +195,101 @@ async fn test_cors_policy_enforcement() {
         .unwrap();
     assert_eq!(res_allowed.status(), StatusCode::OK);
     let allow_header = res_allowed.headers().get("access-control-allow-origin");
-    assert!(
-        allow_header.is_some(),
-        "CORS allow origin must be present for authorized origin"
-    );
     assert_eq!(
         allow_header.unwrap().to_str().unwrap(),
         "http://localhost:3210"
     );
 
-    // 2. Disallowed Origin: http://attacker.evil.com
-    let res_blocked = client
+    // 2. Authorized Wildcard Vercel Origin
+    let res_vercel = client
         .get(format!("{}/api/v1/health", app.base_url))
-        .header("Origin", "http://attacker.evil.com")
+        .header("Origin", "https://llmops-preview-app.vercel.app")
         .send()
         .await
         .unwrap();
-    let blocked_header = res_blocked.headers().get("access-control-allow-origin");
-    assert!(
-        blocked_header.is_none(),
-        "CORS allow origin must NOT be present for unauthorized external origin"
+    assert_eq!(
+        res_vercel
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "https://llmops-preview-app.vercel.app"
     );
+
+    // 3. Disallowed Origin & Subdomain Spoof
+    for bad_origin in [
+        "http://attacker.evil.com",
+        "https://vercel.app.attacker.com",
+    ] {
+        let res_blocked = client
+            .get(format!("{}/api/v1/health", app.base_url))
+            .header("Origin", bad_origin)
+            .send()
+            .await
+            .unwrap();
+        assert!(
+            res_blocked
+                .headers()
+                .get("access-control-allow-origin")
+                .is_none(),
+            "CORS allow origin must NOT match '{}'",
+            bad_origin
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_admin_api_key_auth_enforcement() {
+    let app = SecurityTestApp::spawn_with(
+        "http://localhost:3210",
+        Some("secret-admin-key-123".to_string()),
+    )
+    .await;
+    let client = reqwest::Client::new();
+
+    // GET endpoints remain readable
+    let res_get = client
+        .get(format!("{}/api/v1/models", app.base_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_get.status(), StatusCode::OK);
+
+    // Mutating POST without key is rejected with 401
+    let payload = json!({
+        "name": "Unauthorized Model",
+        "framework": "vLLM",
+        "task": "Text",
+        "version": "v1.0.0"
+    });
+    let res_unauth = client
+        .post(format!("{}/api/v1/models", app.base_url))
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_unauth.status(), StatusCode::UNAUTHORIZED);
+
+    // Mutating POST with valid X-API-Key succeeds
+    let res_xkey = client
+        .post(format!("{}/api/v1/models", app.base_url))
+        .header("X-API-Key", "secret-admin-key-123")
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_xkey.status(), StatusCode::OK);
+
+    // Mutating POST with valid Bearer token succeeds
+    let res_bearer = client
+        .post(format!("{}/api/v1/models", app.base_url))
+        .bearer_auth("secret-admin-key-123")
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_bearer.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -197,7 +297,6 @@ async fn test_error_response_no_credential_leakage() {
     let app = SecurityTestApp::spawn().await;
     let client = reqwest::Client::new();
 
-    // Trigger 404
     let res_404 = client
         .get(format!(
             "{}/api/v1/models/non-existent-secret-check",
@@ -208,10 +307,9 @@ async fn test_error_response_no_credential_leakage() {
         .unwrap();
     let body_404 = res_404.text().await.unwrap();
 
-    // Assert body does not leak internal server paths or DB credentials
     assert!(!body_404.contains("password"));
     assert!(!body_404.contains("sqlite://"));
-    assert!(!body_404.contains(".rs:")); // No raw rust stack traces leaked to client
+    assert!(!body_404.contains(".rs:"));
 }
 
 mod urlencoding {

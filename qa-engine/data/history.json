@@ -1,5 +1,35 @@
 [
   {
+    "run_id": "QA-1795420267942",
+    "started_at": "2026-11-23T07:48:29.086Z",
+    "completed_at": "2026-11-23T07:51:07.941Z",
+    "duration_seconds": 159,
+    "execution_mode": "full",
+    "total_tests": 21,
+    "passed": 21,
+    "failed": 0,
+    "blocked": 0,
+    "skipped": 0,
+    "not_tested": 0,
+    "not_implemented": 0,
+    "pass_rate_percentage": 100
+  },
+  {
+    "run_id": "QA-1795419966772",
+    "started_at": "2026-11-23T07:43:40.787Z",
+    "completed_at": "2026-11-23T07:46:06.772Z",
+    "duration_seconds": 146,
+    "execution_mode": "full",
+    "total_tests": 21,
+    "passed": 20,
+    "failed": 1,
+    "blocked": 0,
+    "skipped": 0,
+    "not_tested": 0,
+    "not_implemented": 0,
+    "pass_rate_percentage": 95.24
+  },
+  {
     "run_id": "QA-1793433699798",
     "started_at": "2026-10-31T07:57:52.219Z",
     "completed_at": "2026-10-31T08:01:39.797Z",

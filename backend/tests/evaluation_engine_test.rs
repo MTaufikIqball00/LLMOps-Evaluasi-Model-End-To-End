@@ -1,4 +1,6 @@
-use llmops_backend::integrations::ragas::{evaluate_sample, EvaluationResult};
+use llmops_backend::integrations::ragas::{
+    compute_hallucination_index, evaluate_sample, EvaluationResult,
+};
 
 #[allow(dead_code)]
 struct ControlledEvalTestCase {
@@ -178,26 +180,41 @@ fn test_controlled_8_case_evaluation_dataset() {
 
 #[test]
 fn test_hallucination_index_formula_divergence_audit() {
-    // Audit check: Verify the discrepancy between the implemented formula in ragas.rs
-    // and the documented formula in README.md Section 8.
+    // Verify exact alignment between implemented compute_hallucination_index and
+    // the documented composite formula in README.md Section 8:
+    // Hallucination Index = 1.0 - (0.40 * F + 0.35 * G + 0.25 * P)
     let faithfulness: f64 = 0.80;
     let groundedness: f64 = 0.70;
     let context_precision: f64 = 0.75;
 
-    // Implemented formula: 1.0 - Faithfulness
-    let implemented_score = ((1.0 - faithfulness) * 100.0).round() / 100.0;
-    assert_eq!(implemented_score, 0.20);
+    let implemented_score =
+        compute_hallucination_index(faithfulness, groundedness, context_precision);
+    let documented_score =
+        calculate_documented_hallucination_index(faithfulness, groundedness, context_precision);
 
-    // Documented formula: 1.0 - (0.40 * F + 0.35 * G + 0.25 * P)
-    let documented_score: f64 =
-        1.0 - (0.40 * faithfulness + 0.35 * groundedness + 0.25 * context_precision);
-    // 1.0 - (0.32 + 0.245 + 0.1875) = 1.0 - 0.7525 = 0.2475
-    let documented_rounded = (documented_score * 1000.0).round() / 1000.0;
-    assert!((documented_rounded - 0.2475).abs() < 0.001);
-
-    // Formal assertion: Document the mathematical difference for root cause reporting
     assert!(
-        (implemented_score - documented_rounded).abs() > 0.01,
-        "Confirmed discrepancy between code implementation and documentation formula"
+        (implemented_score - documented_score).abs() < 0.002,
+        "Implemented composite score ({}) must match documented formula ({})",
+        implemented_score,
+        documented_score
     );
+
+    // Also verify evaluate_sample flags hallucination when groundedness < 0.75 even with moderate index
+    let low_ground = evaluate_sample(
+        "What is the exact hardware allocation?",
+        Some("4x A100 GPUs"),
+        "Completely unrelated claims with extra words not found in context at all.",
+        Some("Cluster specs: Kubernetes container deployment with vLLM."),
+    );
+    assert_eq!(
+        low_ground.hallucination_score,
+        calculate_documented_hallucination_index(
+            low_ground.faithfulness,
+            low_ground.groundedness,
+            low_ground.context_precision
+        )
+    );
+    if low_ground.groundedness < 0.75 || low_ground.hallucination_score > 0.35 {
+        assert!(low_ground.hallucination_detected);
+    }
 }

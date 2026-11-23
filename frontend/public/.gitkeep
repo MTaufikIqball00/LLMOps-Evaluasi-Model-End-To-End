@@ -1,0 +1,1 @@
+# Keep directory tracked so Docker multi-stage build COPY /app/public succeeds

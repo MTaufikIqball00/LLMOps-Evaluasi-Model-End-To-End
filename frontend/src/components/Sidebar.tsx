@@ -17,16 +17,20 @@ import {
   Cpu,
   Layers,
   ShieldCheck,
+  FileCode2,
+  BellRing,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/models", label: "Model Registry", icon: Box },
+  { href: "/prompts", label: "Prompt Registry", icon: FileCode2 },
   { href: "/experiments", label: "Experiments", icon: FlaskConical },
   { href: "/evaluations", label: "LLM Evaluations", icon: CheckCircle2 },
   { href: "/monitoring", label: "Production Monitoring", icon: Activity },
   { href: "/traces", label: "Traces & Requests", icon: ListTree },
   { href: "/costs", label: "Token Usage & Costs", icon: Coins },
+  { href: "/alerts", label: "Alerting & Webhooks", icon: BellRing },
   { href: "/deployments", label: "Deployments", icon: Server },
   { href: "/cicd", label: "CI/CD Pipelines", icon: GitBranch },
   { href: "/integrations", label: "Integrations", icon: Radio },

@@ -18,6 +18,12 @@ pub enum AppError {
     #[error("Invalid request: {0}")]
     BadRequest(String),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("Rate limit exceeded: {0}")]
+    TooManyRequests(String),
+
     #[error("Integration failure with {service}: {message}")]
     Integration { service: String, message: String },
 
@@ -42,6 +48,12 @@ impl IntoResponse for AppError {
         let (status, code, message) = match &self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", msg.clone()),
+            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg.clone()),
+            AppError::TooManyRequests(msg) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "RATE_LIMIT_EXCEEDED",
+                msg.clone(),
+            ),
             AppError::Integration { service, message } => (
                 StatusCode::BAD_GATEWAY,
                 "INTEGRATION_ERROR",

@@ -4,6 +4,7 @@ use crate::errors::AppError;
 use crate::integrations::{
     github_actions, grafana, kubernetes, mlflow, prometheus, ragas, trulens, wandb,
 };
+use crate::persistence::adapt_sql;
 use axum::{
     extract::{Path, State},
     Json,
@@ -18,17 +19,17 @@ pub async fn list_integrations(
         .build()
         .unwrap_or_default();
 
-    let reports = vec![
-        mlflow::check_status(&client, &state.mlflow_url).await,
-        wandb::check_status(&client).await,
-        prometheus::check_status(&client, &state.prometheus_url).await,
-        grafana::check_status(&client, &state.grafana_url).await,
-        ragas::check_status().await,
-        trulens::check_status().await,
-        kubernetes::check_status().await,
-        github_actions::check_status(&client, &state.github_repo, state.github_token.as_deref())
-            .await,
-    ];
+    let (ml, wb, prom, graf, rag, tru, k8s, gh) = tokio::join!(
+        mlflow::check_status(&client, &state.mlflow_url),
+        wandb::check_status(&client),
+        prometheus::check_status(&client, &state.prometheus_url),
+        grafana::check_status(&client, &state.grafana_url),
+        ragas::check_status(),
+        trulens::check_status(),
+        kubernetes::check_status(),
+        github_actions::check_status(&client, &state.github_repo, state.github_token.as_deref()),
+    );
+    let reports = vec![ml, wb, prom, graf, rag, tru, k8s, gh];
 
     Ok(Json(reports))
 }
@@ -78,11 +79,14 @@ pub async fn update_integration(
         }
     });
 
-    let exists: Option<(String,)> =
-        sqlx::query_as("SELECT id FROM integrations_config WHERE service_name = ?")
-            .bind(&name)
-            .fetch_optional(&state.pool)
-            .await?;
+    let check_sql = adapt_sql(
+        "SELECT id FROM integrations_config WHERE service_name = ?",
+        state.is_postgres,
+    );
+    let exists: Option<(String,)> = sqlx::query_as(&check_sql)
+        .bind(&name)
+        .fetch_optional(&state.pool)
+        .await?;
 
     if exists.is_none() {
         return Err(AppError::NotFound(format!(
@@ -91,7 +95,11 @@ pub async fn update_integration(
     }
 
     if let Some(url) = payload.endpoint_url {
-        sqlx::query("UPDATE integrations_config SET endpoint_url = ? WHERE service_name = ?")
+        let sql = adapt_sql(
+            "UPDATE integrations_config SET endpoint_url = ? WHERE service_name = ?",
+            state.is_postgres,
+        );
+        sqlx::query(&sql)
             .bind(&url)
             .bind(&name)
             .execute(&state.pool)
@@ -99,7 +107,11 @@ pub async fn update_integration(
     }
 
     if let Some(masked) = masked_token {
-        sqlx::query("UPDATE integrations_config SET auth_token_masked = ? WHERE service_name = ?")
+        let sql = adapt_sql(
+            "UPDATE integrations_config SET auth_token_masked = ? WHERE service_name = ?",
+            state.is_postgres,
+        );
+        sqlx::query(&sql)
             .bind(&masked)
             .bind(&name)
             .execute(&state.pool)
@@ -107,18 +119,25 @@ pub async fn update_integration(
     }
 
     if let Some(enabled) = is_enabled_int {
-        sqlx::query("UPDATE integrations_config SET is_enabled = ? WHERE service_name = ?")
+        let sql = adapt_sql(
+            "UPDATE integrations_config SET is_enabled = ? WHERE service_name = ?",
+            state.is_postgres,
+        );
+        sqlx::query(&sql)
             .bind(enabled)
             .bind(&name)
             .execute(&state.pool)
             .await?;
     }
 
-    let updated: IntegrationConfig =
-        sqlx::query_as("SELECT * FROM integrations_config WHERE service_name = ?")
-            .bind(&name)
-            .fetch_one(&state.pool)
-            .await?;
+    let fetch_sql = adapt_sql(
+        "SELECT * FROM integrations_config WHERE service_name = ?",
+        state.is_postgres,
+    );
+    let updated: IntegrationConfig = sqlx::query_as(&fetch_sql)
+        .bind(&name)
+        .fetch_one(&state.pool)
+        .await?;
 
     Ok(Json(updated))
 }

@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::signal;
-use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -29,28 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = persistence::init_db(&config.database_url).await?;
 
     // Create shared application state
-    let state = Arc::new(api::health::AppState {
-        pool,
-        start_time,
-        server_port: config.server_port,
-        frontend_origin: config.frontend_origin.clone(),
-        mlflow_url: config.mlflow_url,
-        prometheus_url: config.prometheus_url,
-        grafana_url: config.grafana_url,
-        github_repo: config.github_repo,
-        github_token: config.github_token,
-    });
+    let state = Arc::new(api::health::AppState::from_config(
+        pool, &config, start_time,
+    ));
 
-    // Configure CORS for isolated frontend origin
-    let cors = CorsLayer::new()
-        .allow_origin(tower_http::cors::AllowOrigin::predicate(|origin, _| {
-            let s = origin.to_str().unwrap_or("");
-            s.starts_with("http://localhost:3210")
-                || s.starts_with("http://127.0.0.1:3210")
-                || s.starts_with("http://localhost:3000")
-        }))
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Configure CORS dynamically from FRONTEND_ORIGIN (supports comma-separated & *.vercel.app)
+    let cors = api::build_cors_layer(&config.frontend_origin);
 
     // Build Axum router
     let app = api::build_router(state)
@@ -70,6 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.server_port
     );
     info!(
+        " OpenAPI / Swagger:  http://localhost:{}/api/v1/docs",
+        config.server_port
+    );
+    info!(
         " Health Endpoint:    http://localhost:{}/api/v1/health",
         config.server_port
     );
@@ -78,7 +65,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.server_port
     );
     info!(" Target Frontend:    {}", config.frontend_origin);
-    info!(" Database:           {}", config.database_url);
+    info!(
+        " API Key Guard:      {}",
+        if config.admin_api_key.is_some() {
+            "ENABLED (Mutations Protected)"
+        } else {
+            "Open (Set ADMIN_API_KEY to enforce)"
+        }
+    );
+    info!(
+        " Rate Limit / Timeout: {} RPM / {}s",
+        config.rate_limit_rpm, config.request_timeout_secs
+    );
     info!(" Environment:        {}", config.app_env);
     info!("========================================================");
 

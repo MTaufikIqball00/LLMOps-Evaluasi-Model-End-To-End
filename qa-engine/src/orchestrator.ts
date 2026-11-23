@@ -47,12 +47,12 @@ export class QAOrchestrator {
         title: 'Secret Scrubber Regex Hyphen Leak (sk-proj-... / sk-ant-...)',
         severity: 'HIGH',
         category: 'Security / Token Sanitization',
-        status: 'OPEN',
+        status: 'RESOLVED',
         file_path: 'backend/src/observability/mod.rs',
-        line_number: 62,
-        description: 'Regex `(?i)(sk-[a-zA-Z0-9]{20,})` does not match hyphens, leaving modern project keys unredacted.',
-        evidence: 'security_audit_test.rs::test_modern_project_key_vulnerability_probe confirmed token persistence',
-        impact: 'Exposure of modern OpenAI and Anthropic project credentials in logs and database.',
+        line_number: 11,
+        description: 'Regex updated to `(?i)(sk-[a-zA-Z0-9_-]{20,})` and scrubbing enforced on error_message and metadata in create_trace.',
+        evidence: 'security_audit_test.rs::test_modern_project_key_vulnerability_probe & test_trace_redacts_error_message_and_metadata pass',
+        impact: 'All modern OpenAI/Anthropic keys, GitHub PATs, Slack/HF/AWS tokens are redacted before persistence.',
         cve_or_cwe: 'CWE-312: Cleartext Storage of Sensitive Information'
       },
       {
@@ -60,12 +60,12 @@ export class QAOrchestrator {
         title: 'Hallucination Index Formula Divergence Between Spec and Code',
         severity: 'MEDIUM',
         category: 'LLM Evaluation & Ragas',
-        status: 'OPEN',
+        status: 'RESOLVED',
         file_path: 'backend/src/integrations/ragas.rs',
-        line_number: 107,
-        description: 'Implementation uses `1.0 - Faithfulness` instead of weighted formula `1.0 - (0.40*F + 0.35*G + 0.25*CP)`.',
-        evidence: 'evaluation_engine_test.rs::test_hallucination_index_formula_divergence_audit confirmed calculation gap',
-        impact: 'Low groundedness answers do not trigger hallucination alerts if faithfulness is high.',
+        line_number: 30,
+        description: 'Aligned to composite weighted formula `1.0 - (0.40*F + 0.35*G + 0.25*CP)` and groundedness < 0.75 alert guard.',
+        evidence: 'evaluation_engine_test.rs::test_hallucination_index_formula_divergence_audit verifies exact alignment',
+        impact: 'Low groundedness answers accurately trigger hallucination alerts.',
         cve_or_cwe: 'CWE-684: Incorrect Provision of Specified Functionality'
       },
       {
@@ -73,12 +73,12 @@ export class QAOrchestrator {
         title: 'Documented API Route Prefixing Mismatch (/api/* vs /api/v1/*)',
         severity: 'LOW',
         category: 'API Architecture & Documentation',
-        status: 'OPEN',
+        status: 'RESOLVED',
         file_path: 'backend/src/api/mod.rs',
-        line_number: 25,
-        description: 'Axum router prefixes all endpoints under `/api/v1/*` while docs state `/api/*`.',
-        evidence: 'Direct HTTP GET on http://localhost:8210/api/models returned 404',
-        impact: 'External integrations expecting unversioned /api/* will encounter 404 Not Found.',
+        line_number: 139,
+        description: 'README.md, .env.example, and OpenAPI 3.1.0 spec synchronized with /api/v1/* routes and new env vars.',
+        evidence: 'api_endpoints_test.rs::test_openapi_and_swagger_endpoints validates live OpenAPI spec & Swagger UI',
+        impact: 'All external docs and specs align 100% with Axum routes.',
         cve_or_cwe: 'Architecture Documentation Drift'
       }
     ];

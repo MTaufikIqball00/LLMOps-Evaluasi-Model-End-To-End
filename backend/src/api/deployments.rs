@@ -1,6 +1,7 @@
 use crate::api::health::AppState;
 use crate::domain::Deployment;
 use crate::errors::AppError;
+use crate::persistence::adapt_sql;
 use axum::{
     extract::{Path, State},
     Json,
@@ -21,7 +22,11 @@ pub async fn restart_deployment(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<Deployment>, AppError> {
-    let rows = sqlx::query("UPDATE deployments SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    let update_sql = adapt_sql(
+        "UPDATE deployments SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        state.is_postgres,
+    );
+    let rows = sqlx::query(&update_sql)
         .bind(&id)
         .execute(&state.pool)
         .await?
@@ -31,7 +36,8 @@ pub async fn restart_deployment(
         return Err(AppError::NotFound(format!("Deployment '{id}' not found")));
     }
 
-    let dep: Deployment = sqlx::query_as("SELECT * FROM deployments WHERE id = ?")
+    let fetch_sql = adapt_sql("SELECT * FROM deployments WHERE id = ?", state.is_postgres);
+    let dep: Deployment = sqlx::query_as(&fetch_sql)
         .bind(&id)
         .fetch_one(&state.pool)
         .await?;

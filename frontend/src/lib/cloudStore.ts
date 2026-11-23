@@ -14,7 +14,32 @@ export interface CloudState {
   deployments: any[];
   workflows: any[];
   integrations: any[];
+  prompts: any[];
+  alertRules: any[];
+  alertEvents: any[];
   startedAt: number;
+}
+
+function computePercentiles(latencies: number[]) {
+  const valid = latencies.filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
+  if (valid.length === 0) {
+    return { p50: 0, p95: 0, p99: 0, avg: 0 };
+  }
+  const avg = Math.round((valid.reduce((s, v) => s + v, 0) / valid.length) * 10) / 10;
+  const pctAt = (p: number) => {
+    if (valid.length === 1) return Math.round(valid[0] * 10) / 10;
+    const idx = p * (valid.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    const val = valid[lo] + (valid[hi] - valid[lo]) * (idx - lo);
+    return Math.round(val * 10) / 10;
+  };
+  return { p50: pctAt(0.5), p95: pctAt(0.95), p99: pctAt(0.99), avg };
+}
+
+function computeCompositeHallucination(faithfulness: number, groundedness: number, contextPrecision: number) {
+  const composite = 0.4 * faithfulness + 0.35 * groundedness + 0.25 * contextPrecision;
+  return Math.round(Math.max(0, Math.min(1, 1 - composite)) * 1000) / 1000;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -544,6 +569,104 @@ export function getInitialCloudState(): CloudState {
         last_checked: ts,
       },
     ],
+    prompts: [
+      {
+        id: "prm-rag-v1",
+        name: "Enterprise RAG Policy Synthesizer",
+        slug: "rag-policy-synthesizer",
+        version: "v1.0.0",
+        template:
+          "You are an enterprise policy assistant.\nUse the context below to answer the question concisely.\nContext:\n{{context}}\n\nQuestion: {{question}}\nAnswer:",
+        variables: '["context", "question"]',
+        model_target: "Llama-3.1-70B-Instruct",
+        stage: "Staging",
+        description: "Baseline RAG system prompt before strict citation grounding rules.",
+        tags: '["rag", "policy", "baseline"]',
+        avg_faithfulness: 0.892,
+        avg_latency_ms: 295.0,
+        usage_count: 1420,
+        created_at: ts,
+        updated_at: ts,
+      },
+      {
+        id: "prm-rag-v2",
+        name: "Enterprise RAG Policy Synthesizer (Strict Grounding)",
+        slug: "rag-policy-synthesizer",
+        version: "v2.0.0",
+        template:
+          'You are an enterprise compliance assistant.\nSTRICT RULE: Rely ONLY on verified facts inside <context>. If unsure, say "Insufficient evidence".\nCite section headers inline.\n<context>\n{{context}}\n</context>\n\nQuestion: {{question}}\nGrounded Answer:',
+        variables: '["context", "question"]',
+        model_target: "Llama-3.1-70B-Instruct",
+        stage: "Production",
+        description: "Hardened RAG prompt with XML boundaries and strict ungrounded-claim refusal.",
+        tags: '["rag", "policy", "production", "grounded"]',
+        avg_faithfulness: 0.964,
+        avg_latency_ms: 268.4,
+        usage_count: 4890,
+        created_at: ts,
+        updated_at: ts,
+      },
+      {
+        id: "prm-code-v1",
+        name: "Rust Axum Security Code Reviewer",
+        slug: "code-reviewer-rust",
+        version: "v1.0.0",
+        template:
+          "Review the following Rust handler for SQL injection, unredacted secrets, and missing timeouts.\nCode:\n{{code_diff}}\nProvide structured findings with severity:",
+        variables: '["code_diff"]',
+        model_target: "Qwen-2.5-Coder-32B",
+        stage: "Production",
+        description: "Automated PR security review prompt for Rust microservices.",
+        tags: '["security", "rust", "cicd"]',
+        avg_faithfulness: 0.931,
+        avg_latency_ms: 184.2,
+        usage_count: 615,
+        created_at: ts,
+        updated_at: ts,
+      },
+    ],
+    alertRules: [
+      {
+        id: "rule-hallucination-guard",
+        name: "Hallucination Index SLA Guard",
+        metric_type: "hallucination_score",
+        operator: "gt",
+        threshold: 0.35,
+        severity: "Critical",
+        webhook_url: null,
+        channel_type: "slack",
+        is_enabled: 1,
+        last_triggered_at: null,
+        created_at: ts,
+      },
+      {
+        id: "rule-latency-p95",
+        name: "Inference p95 Latency SLA",
+        metric_type: "latency_p95_ms",
+        operator: "gt",
+        threshold: 500.0,
+        severity: "High",
+        webhook_url: null,
+        channel_type: "webhook",
+        is_enabled: 1,
+        last_triggered_at: null,
+        created_at: ts,
+      },
+      {
+        id: "rule-budget-threshold",
+        name: "Monthly Token Budget Cap Guard",
+        metric_type: "budget_used_pct",
+        operator: "gte",
+        threshold: 80.0,
+        severity: "Medium",
+        webhook_url: null,
+        channel_type: "discord",
+        is_enabled: 1,
+        last_triggered_at: null,
+        created_at: ts,
+      },
+    ],
+    alertEvents: [],
   };
 }
 
@@ -631,6 +754,7 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
     const avgRel = state.evaluations.reduce((a, e) => a + e.answer_relevance, 0) / evalCount;
     const avgGround = state.evaluations.reduce((a, e) => a + e.groundedness, 0) / evalCount;
     const avgHalluc = state.evaluations.reduce((a, e) => a + e.hallucination_score, 0) / evalCount;
+    const pct = computePercentiles(state.traces.map((t) => t.latency_ms));
 
     return {
       total_requests: total,
@@ -638,10 +762,10 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
       failed_requests: failed,
       success_rate_pct: Math.round(successRate * 10) / 10,
       latency: {
-        p50_ms: 248.5,
-        p95_ms: 410.2,
-        p99_ms: 680.0,
-        avg_ms: 292.4,
+        p50_ms: pct.p50,
+        p95_ms: pct.p95,
+        p99_ms: pct.p99,
+        avg_ms: pct.avg,
       },
       tokens: {
         prompt_tokens: promptTokens,
@@ -669,33 +793,55 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
         ready_replicas: state.deployments.reduce((a, d) => a + d.replicas_ready, 0),
         desired_replicas: state.deployments.reduce((a, d) => a + d.replicas_desired, 0),
       },
-      active_environment: "Production",
-      data_freshness: "Live Telemetry Active",
+      active_environment: "Cloud Fallback Mode (Serverless Store)",
+      data_freshness: "Embedded Edge State",
     };
   }
 
-  // 3. GET /monitoring/metrics
+  // 3. GET /monitoring/metrics — grouped from actual trace timestamps in CloudState
   if (pathname === "/monitoring/metrics" && method === "GET") {
     const now = Date.now();
     const timestamps: string[] = [];
-    const throughput_rpm: number[] = [];
-    const p50_latency_ms: number[] = [];
-    const p95_latency_ms: number[] = [];
-    const p99_latency_ms: number[] = [];
-    const error_rate_pct: number[] = [];
+    const buckets: { lat: number; status: number }[][] = Array.from({ length: 12 }, () => []);
 
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now - i * 5 * 60 * 1000);
       const hh = String(d.getHours()).padStart(2, "0");
       const mm = String(d.getMinutes()).padStart(2, "0");
       timestamps.push(`${hh}:${mm}`);
+    }
 
-      const wave = Math.sin(i * 0.5);
-      throughput_rpm.push(Math.round(42 + wave * 8));
-      p50_latency_ms.push(Math.round((220 + wave * 18) * 10) / 10);
-      p95_latency_ms.push(Math.round((380 + wave * 35) * 10) / 10);
-      p99_latency_ms.push(Math.round((590 + wave * 60) * 10) / 10);
-      error_rate_pct.push(i % 4 === 0 ? 1.2 : 0.4);
+    for (const tr of state.traces) {
+      const tMs = Date.parse(tr.created_at) || now;
+      const ageMins = Math.floor((now - tMs) / 60000);
+      if (ageMins >= 0 && ageMins < 60) {
+        const idx = 11 - Math.min(11, Math.floor(ageMins / 5));
+        buckets[idx].push({ lat: tr.latency_ms, status: tr.status_code });
+      }
+    }
+
+    const throughput_rpm: number[] = [];
+    const p50_latency_ms: number[] = [];
+    const p95_latency_ms: number[] = [];
+    const p99_latency_ms: number[] = [];
+    const error_rate_pct: number[] = [];
+
+    for (const b of buckets) {
+      if (b.length === 0) {
+        throughput_rpm.push(0);
+        p50_latency_ms.push(0);
+        p95_latency_ms.push(0);
+        p99_latency_ms.push(0);
+        error_rate_pct.push(0);
+      } else {
+        const pct = computePercentiles(b.map((x) => x.lat));
+        const errs = b.filter((x) => x.status >= 400).length;
+        throughput_rpm.push(Math.round((b.length / 5) * 100) / 100);
+        p50_latency_ms.push(pct.p50);
+        p95_latency_ms.push(pct.p95);
+        p99_latency_ms.push(pct.p99);
+        error_rate_pct.push(Math.round((errs / b.length) * 1000) / 10);
+      }
     }
 
     return {
@@ -705,7 +851,7 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
       p95_latency_ms,
       p99_latency_ms,
       error_rate_pct,
-      active_source: "Live Database Telemetry + Prometheus Exporter",
+      active_source: `Cloud Fallback Telemetry (${state.traces.length} traces in 60m window)`,
       is_prometheus_live: false,
     };
   }
@@ -841,9 +987,17 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
       {
         metric_name: "TruLens Groundedness",
         formula_or_approach: "Sentence-level attribution verification mapping each output assertion to source evidence.",
-        target_range: "0.85 - 1.00 (Higher is better)",
+        target_range: "0.75 - 1.00 (Higher is better)",
         interpretation: "Verifies that every claim is backed by an explicit span in the source knowledge base.",
-        hallucination_relevance: "Directly flags ungrounded assertions as hallucination events.",
+        hallucination_relevance: "Contributes 35% weight to Hallucination Score; < 0.75 triggers alert.",
+      },
+      {
+        metric_name: "Hallucination Score",
+        formula_or_approach:
+          "1.0 - (0.40 * Faithfulness + 0.35 * Groundedness + 0.25 * Context Precision). Flagged if > 0.35 or Groundedness < 0.75.",
+        target_range: "0.00 - 0.15 (Lower is better)",
+        interpretation: "Composite weighted hallucination index for alert thresholds and CI/CD deployment gates.",
+        hallucination_relevance: "Triggers automated alerts and webhooks when exceeding tolerance.",
       },
     ];
   }
@@ -851,6 +1005,9 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
   if (pathname === "/evaluations" && method === "POST") {
     const id = `eval-${Date.now().toString(36)}`;
     const ts = nowIso();
+    const f = 0.938;
+    const g = 0.945;
+    const cp = 0.896;
     const newEval = {
       id,
       name: body.name || "Automated Evaluation Gate",
@@ -858,12 +1015,12 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
       dataset_name: body.dataset_name || "enterprise-kb-v3-eval",
       evaluator_framework: body.evaluator_framework || "Ragas & TruLens Suite",
       status: "Completed",
-      faithfulness: 0.938,
+      faithfulness: f,
       answer_relevance: 0.924,
-      context_precision: 0.896,
+      context_precision: cp,
       context_recall: 0.91,
-      groundedness: 0.945,
-      hallucination_score: 0.055,
+      groundedness: g,
+      hallucination_score: computeCompositeHallucination(f, g, cp),
       avg_latency_ms: 284.5,
       total_tokens: 36400,
       test_cases_count: 20,
@@ -1011,6 +1168,274 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
       saveState(state);
       return item;
     }
+  }
+
+  // 13. /prompts (Prompt Registry & A/B Comparison)
+  if (pathname === "/prompts" && method === "GET") {
+    const stage = params.get("stage");
+    let list = [...(state.prompts || [])];
+    if (stage && stage !== "all") {
+      list = list.filter((p) => p.stage.toLowerCase() === stage.toLowerCase());
+    }
+    return list;
+  }
+
+  if (pathname === "/prompts" && method === "POST") {
+    const ts = nowIso();
+    const tmpl = String(body.template || "");
+    const vars = Array.from(tmpl.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g)).map((m) => m[1]);
+    const created = {
+      id: `prm-${Date.now().toString(36)}`,
+      name: body.name || "Untitled Prompt",
+      slug:
+        body.slug ||
+        String(body.name || "untitled-prompt")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, ""),
+      version: body.version || "v1.0.0",
+      template: tmpl,
+      variables: JSON.stringify(Array.from(new Set(vars))),
+      model_target: body.model_target || "Llama-3.1-70B-Instruct",
+      stage: body.stage || "Draft",
+      description: body.description || "Created in Cloud Fallback Mode",
+      tags: JSON.stringify(body.tags || ["custom"]),
+      avg_faithfulness: 0.92,
+      avg_latency_ms: 240.0,
+      usage_count: 0,
+      created_at: ts,
+      updated_at: ts,
+    };
+    state.prompts = [created, ...(state.prompts || [])];
+    saveState(state);
+    return created;
+  }
+
+  if (pathname === "/prompts/compare" && method === "GET") {
+    const list = state.prompts || [];
+    const prompt_a = list.find((p) => p.id === params.get("a")) || list[0];
+    const prompt_b = list.find((p) => p.id === params.get("b")) || list[1] || list[0];
+    if (!prompt_a || !prompt_b) return { diff_lines: [], shared_variables: [] };
+    const varsA = new Set(JSON.parse(prompt_a.variables || "[]") as string[]);
+    const varsB = new Set(JSON.parse(prompt_b.variables || "[]") as string[]);
+    const shared_variables = Array.from(varsA).filter((v) => varsB.has(v));
+    const added_variables = Array.from(varsB).filter((v) => !varsA.has(v));
+    const removed_variables = Array.from(varsA).filter((v) => !varsB.has(v));
+
+    const linesA = String(prompt_a.template).split("\n");
+    const linesB = String(prompt_b.template).split("\n");
+    const setA = new Set(linesA);
+    const setB = new Set(linesB);
+    const diff_lines: any[] = [];
+    let ln = 1;
+    for (const l of linesA) {
+      diff_lines.push({
+        line_number: ln++,
+        change_type: setB.has(l) ? "unchanged" : "removed",
+        content: l,
+      });
+    }
+    for (const l of linesB) {
+      if (!setA.has(l)) {
+        diff_lines.push({ line_number: ln++, change_type: "added", content: l });
+      }
+    }
+    return {
+      prompt_a,
+      prompt_b,
+      shared_variables,
+      added_variables,
+      removed_variables,
+      faithfulness_delta: Math.round((prompt_b.avg_faithfulness - prompt_a.avg_faithfulness) * 1000) / 1000,
+      latency_delta_ms: Math.round((prompt_b.avg_latency_ms - prompt_a.avg_latency_ms) * 10) / 10,
+      diff_lines,
+    };
+  }
+
+  const promptIdMatch = pathname.match(/^\/prompts\/([^/]+)$/);
+  if (promptIdMatch) {
+    const id = promptIdMatch[1];
+    if (method === "PATCH") {
+      const target = (state.prompts || []).find((p) => p.id === id);
+      if (target) {
+        if (body.stage) target.stage = body.stage;
+        if (body.template) target.template = body.template;
+        if (body.description) target.description = body.description;
+        target.updated_at = nowIso();
+        saveState(state);
+        return target;
+      }
+    }
+    if (method === "DELETE") {
+      state.prompts = (state.prompts || []).filter((p) => p.id !== id);
+      saveState(state);
+      return { deleted: true, id };
+    }
+  }
+
+  // 14. /alerts
+  if (pathname === "/alerts/rules" && method === "GET") {
+    return state.alertRules || [];
+  }
+
+  if (pathname === "/alerts/rules" && method === "POST") {
+    const created = {
+      id: `rule-${Date.now().toString(36)}`,
+      name: body.name || "Custom SLA Rule",
+      metric_type: body.metric_type || "latency_p95_ms",
+      operator: body.operator || "gt",
+      threshold: Number(body.threshold ?? 500),
+      severity: body.severity || "High",
+      webhook_url: body.webhook_url || null,
+      channel_type: body.channel_type || "webhook",
+      is_enabled: 1,
+      last_triggered_at: null,
+      created_at: nowIso(),
+    };
+    state.alertRules = [created, ...(state.alertRules || [])];
+    saveState(state);
+    return created;
+  }
+
+  const ruleTestMatch = pathname.match(/^\/alerts\/rules\/([^/]+)\/test$/);
+  if (ruleTestMatch && method === "POST") {
+    const id = ruleTestMatch[1];
+    const rule = (state.alertRules || []).find((r) => r.id === id);
+    return {
+      rule_id: id,
+      channel_type: rule?.channel_type || "webhook",
+      delivery_status: "Dry-Run Verified (Cloud Fallback Mode)",
+      tested_at: nowIso(),
+    };
+  }
+
+  const ruleIdMatch = pathname.match(/^\/alerts\/rules\/([^/]+)$/);
+  if (ruleIdMatch) {
+    const id = ruleIdMatch[1];
+    if (method === "PATCH") {
+      const rule = (state.alertRules || []).find((r) => r.id === id);
+      if (rule) {
+        if (typeof body.is_enabled === "boolean") rule.is_enabled = body.is_enabled ? 1 : 0;
+        if (typeof body.threshold === "number") rule.threshold = body.threshold;
+        if (typeof body.webhook_url === "string") rule.webhook_url = body.webhook_url;
+        saveState(state);
+        return rule;
+      }
+    }
+    if (method === "DELETE") {
+      state.alertRules = (state.alertRules || []).filter((r) => r.id !== id);
+      saveState(state);
+      return { deleted: true, id };
+    }
+  }
+
+  if (pathname === "/alerts/events" && method === "GET") {
+    return state.alertEvents || [];
+  }
+
+  if (pathname === "/alerts/evaluate" && method === "POST") {
+    const pct = computePercentiles(state.traces.map((t) => t.latency_ms));
+    const maxHall = Math.max(0, ...state.evaluations.map((e) => e.hallucination_score || 0));
+    const budgetPct =
+      state.budget.monthly_budget_usd > 0
+        ? (state.budget.current_spend_usd / state.budget.monthly_budget_usd) * 100
+        : 0;
+    const errRate =
+      state.traces.length > 0
+        ? (state.traces.filter((t) => t.status_code >= 400).length / state.traces.length) * 100
+        : 0;
+
+    const triggered: any[] = [];
+    for (const r of state.alertRules || []) {
+      if (r.is_enabled !== 1) continue;
+      const obs =
+        r.metric_type === "hallucination_score"
+          ? maxHall
+          : r.metric_type === "latency_p95_ms"
+          ? pct.p95
+          : r.metric_type === "budget_used_pct"
+          ? budgetPct
+          : errRate;
+      const hit =
+        r.operator === "gte"
+          ? obs >= r.threshold
+          : r.operator === "lt"
+          ? obs < r.threshold
+          : r.operator === "lte"
+          ? obs <= r.threshold
+          : obs > r.threshold;
+      if (hit) {
+        const ev = {
+          id: `alev-${Date.now().toString(36)}-${triggered.length}`,
+          rule_id: r.id,
+          rule_name: r.name,
+          metric_type: r.metric_type,
+          observed_value: obs,
+          threshold: r.threshold,
+          severity: r.severity,
+          message: `Rule '${r.name}' breached: ${r.metric_type} observed at ${obs.toFixed(2)} (${r.operator} ${r.threshold})`,
+          delivery_status: "Logged (Cloud Fallback Mode)",
+          created_at: nowIso(),
+        };
+        r.last_triggered_at = nowIso();
+        triggered.push(ev);
+      }
+    }
+    state.alertEvents = [...triggered, ...(state.alertEvents || [])].slice(0, 100);
+    saveState(state);
+    return triggered;
+  }
+
+  // 15. /gateway/chat/completions & /openapi.json
+  if (pathname === "/gateway/chat/completions" && method === "POST") {
+    const promptStr = Array.isArray(body.messages)
+      ? body.messages.map((m: any) => `${m.role}: ${m.content}`).join("\n")
+      : "";
+    const pTokens = Math.max(1, Math.ceil(promptStr.length / 4));
+    const reply = `[Cloud Fallback Gateway] Received request for model '${body.model || "gpt-4o-mini"}'.`;
+    const cTokens = Math.max(1, Math.ceil(reply.length / 4));
+    const cost = Math.round(((pTokens / 1000) * 0.00015 + (cTokens / 1000) * 0.0006) * 1e6) / 1e6;
+    const traceId = `tr-gw-${Date.now().toString(36)}`;
+    state.traces.unshift({
+      id: traceId,
+      trace_id: traceId,
+      span_name: "gateway::chat_completions",
+      model_name: body.model || "gpt-4o-mini",
+      provider: body.provider || "openai_compatible",
+      status_code: 200,
+      latency_ms: 42.5,
+      prompt_tokens: pTokens,
+      completion_tokens: cTokens,
+      total_tokens: pTokens + cTokens,
+      estimated_cost: cost,
+      redacted_prompt: promptStr,
+      redacted_completion: reply,
+      metadata: JSON.stringify({ gateway_mode: "cloud_fallback" }),
+      error_message: null,
+      created_at: nowIso(),
+    });
+    state.budget.current_spend_usd = Math.round((state.budget.current_spend_usd + cost) * 1e6) / 1e6;
+    saveState(state);
+    return {
+      id: `chatcmpl-${Date.now().toString(36)}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: body.model || "gpt-4o-mini",
+      mode: "cloud_fallback",
+      choices: [{ index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" }],
+      usage: { prompt_tokens: pTokens, completion_tokens: cTokens, total_tokens: pTokens + cTokens },
+      trace_id: traceId,
+      estimated_cost_usd: cost,
+      latency_ms: 42.5,
+    };
+  }
+
+  if (pathname === "/openapi.json" && method === "GET") {
+    return {
+      openapi: "3.1.0",
+      info: { title: "LLMOps Control Center API (Cloud Fallback)", version: "0.1.0" },
+      paths: { "/health": {}, "/overview/stats": {}, "/models": {}, "/prompts": {}, "/alerts/rules": {}, "/gateway/chat/completions": {} },
+    };
   }
 
   return { status: "ok" };

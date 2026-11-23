@@ -1,5 +1,6 @@
 use crate::api::health::AppState;
 use crate::errors::AppError;
+use crate::observability::compute_latency_percentiles;
 use axum::{extract::State, Json};
 use serde::Serialize;
 use std::sync::Arc;
@@ -70,7 +71,6 @@ pub struct DeploymentSummaryStats {
 pub async fn get_overview_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<OverviewStats>, AppError> {
-    // Queries from request_traces
     let trace_counts: (i64, i64, i64) = sqlx::query_as(
         r#"
         SELECT 
@@ -104,17 +104,18 @@ pub async fn get_overview_stats(
     .fetch_one(&state.pool)
     .await?;
 
-    let avg_latency: (f64,) = sqlx::query_as(
-        "SELECT COALESCE(AVG(latency_ms), 245.0) FROM request_traces WHERE status_code = 200",
-    )
-    .fetch_one(&state.pool)
-    .await?;
+    // Compute real percentiles directly from persisted request_traces latencies
+    let latency_rows: Vec<(f64,)> = sqlx::query_as("SELECT latency_ms FROM request_traces")
+        .fetch_all(&state.pool)
+        .await
+        .unwrap_or_default();
+    let pct = compute_latency_percentiles(latency_rows.into_iter().map(|r| r.0).collect());
 
     let budget_row: (f64, f64) =
         sqlx::query_as("SELECT monthly_budget_usd, current_spend_usd FROM budget_settings LIMIT 1")
             .fetch_one(&state.pool)
             .await
-            .unwrap_or((2500.0, 1428.50));
+            .unwrap_or((2500.0, 0.0));
 
     let budget_used_pct = if budget_row.0 > 0.0 {
         (budget_row.1 / budget_row.0) * 100.0
@@ -126,7 +127,6 @@ pub async fn get_overview_stats(
         .fetch_one(&state.pool)
         .await?;
 
-    // Model distribution
     let model_rows: Vec<(String, i64)> = sqlx::query_as(
         r#"
         SELECT model_name, COUNT(*) as cnt
@@ -142,7 +142,7 @@ pub async fn get_overview_stats(
     let model_distribution: Vec<ModelUsageItem> = model_rows
         .into_iter()
         .map(|(name, count)| {
-            let pct = if total > 0 {
+            let pct_share = if total > 0 {
                 (count as f64 / total as f64) * 100.0
             } else {
                 0.0
@@ -150,28 +150,26 @@ pub async fn get_overview_stats(
             ModelUsageItem {
                 model_name: name,
                 requests_count: count,
-                percentage: (pct * 10.0).round() / 10.0,
+                percentage: (pct_share * 10.0).round() / 10.0,
             }
         })
         .collect();
 
-    // Evaluation summary
     let eval_summary: (i64, f64, f64, f64, f64) = sqlx::query_as(
         r#"
         SELECT 
             COUNT(*),
-            COALESCE(AVG(faithfulness), 0.94),
-            COALESCE(AVG(answer_relevance), 0.92),
-            COALESCE(AVG(groundedness), 0.95),
-            COALESCE(AVG(hallucination_score), 0.05)
+            COALESCE(AVG(faithfulness), 0.0),
+            COALESCE(AVG(answer_relevance), 0.0),
+            COALESCE(AVG(groundedness), 0.0),
+            COALESCE(AVG(hallucination_score), 0.0)
         FROM evaluations
         "#,
     )
     .fetch_one(&state.pool)
     .await
-    .unwrap_or((0, 0.94, 0.92, 0.95, 0.05));
+    .unwrap_or((0, 0.0, 0.0, 0.0, 0.0));
 
-    // Deployment summary
     let dep_summary: (i64, i64, i64, i64) = sqlx::query_as(
         r#"
         SELECT 
@@ -186,16 +184,22 @@ pub async fn get_overview_stats(
     .await
     .unwrap_or((0, 0, 0, 0));
 
+    let engine_label = if state.is_postgres {
+        "PostgreSQL"
+    } else {
+        "SQLite"
+    };
+
     Ok(Json(OverviewStats {
         total_requests: total,
         successful_requests: successful,
         failed_requests: failed,
         success_rate_pct: (success_rate * 10.0).round() / 10.0,
         latency: LatencyStats {
-            p50_ms: (avg_latency.0 * 0.85 * 10.0).round() / 10.0,
-            p95_ms: (avg_latency.0 * 1.55 * 10.0).round() / 10.0,
-            p99_ms: (avg_latency.0 * 2.30 * 10.0).round() / 10.0,
-            avg_ms: (avg_latency.0 * 10.0).round() / 10.0,
+            p50_ms: pct.p50,
+            p95_ms: pct.p95,
+            p99_ms: pct.p99,
+            avg_ms: pct.avg,
         },
         tokens: TokenStats {
             prompt_tokens: token_counts.0,
@@ -203,7 +207,7 @@ pub async fn get_overview_stats(
             total_tokens: token_counts.2,
         },
         cost: CostStats {
-            current_spend_usd: budget_row.1,
+            current_spend_usd: (budget_row.1 * 100.0).round() / 100.0,
             monthly_budget_usd: budget_row.0,
             budget_used_pct: (budget_used_pct * 10.0).round() / 10.0,
         },
@@ -222,7 +226,7 @@ pub async fn get_overview_stats(
             ready_replicas: dep_summary.2,
             desired_replicas: dep_summary.3,
         },
-        active_environment: "Production / Multi-Cluster".to_string(),
-        data_freshness: "Live Database & Integrations".to_string(),
+        active_environment: format!("Production ({engine_label})"),
+        data_freshness: format!("Live {engine_label} Telemetry"),
     }))
 }

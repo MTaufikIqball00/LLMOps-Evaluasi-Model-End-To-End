@@ -9,14 +9,12 @@ async fn test_clean_database_initialization_and_migrations() {
     let db_path = format!("target/tmp/test_dbs/db_mig_{}.db", db_id);
     let db_url = format!("sqlite://{}?mode=rwc", db_path);
 
-    // Initial clean bootstrap
     let pool = persistence::init_db(&db_url)
         .await
         .expect("Database initialization must succeed from clean environment");
 
-    // Verify all 10 tables exist
     let tables: Vec<(String,)> = sqlx::query_as(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC",
     )
     .fetch_all(&pool)
     .await
@@ -24,6 +22,8 @@ async fn test_clean_database_initialization_and_migrations() {
 
     let table_names: Vec<String> = tables.into_iter().map(|t| t.0).collect();
     let expected_tables = vec![
+        "alert_events",
+        "alert_rules",
         "budget_settings",
         "cicd_workflows",
         "deployments",
@@ -33,6 +33,7 @@ async fn test_clean_database_initialization_and_migrations() {
         "integrations_config",
         "models",
         "pricing_catalog",
+        "prompts",
         "request_traces",
     ];
 
@@ -44,14 +45,12 @@ async fn test_clean_database_initialization_and_migrations() {
         );
     }
 
-    // Verify seed data was inserted
     let model_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM models")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert!(model_count.0 >= 4, "Must seed baseline models");
 
-    // Clean up
     drop(pool);
     let _ = std::fs::remove_file(&db_path);
 }
@@ -64,7 +63,6 @@ async fn test_primary_and_unique_key_constraints() {
 
     let pool = persistence::init_db(&db_url).await.unwrap();
 
-    // 1. Primary Key uniqueness on models
     let duplicate_insert = sqlx::query(
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
@@ -79,7 +77,6 @@ async fn test_primary_and_unique_key_constraints() {
         "Inserting duplicate primary key 'm-llama31-70b' must fail constraint"
     );
 
-    // 2. Unique constraint on integrations_config.service_name
     let duplicate_service = sqlx::query(
         r#"
         INSERT INTO integrations_config (id, service_name, last_status)
@@ -94,7 +91,6 @@ async fn test_primary_and_unique_key_constraints() {
         "Inserting duplicate service_name 'mlflow' must fail UNIQUE constraint"
     );
 
-    // 3. NOT NULL constraint on models.name
     let null_name = sqlx::query(
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
@@ -121,12 +117,7 @@ async fn test_foreign_key_cascading_deletes() {
 
     let pool = persistence::init_db(&db_url).await.unwrap();
 
-    // Enable foreign keys explicitly in SQLite session
-    sqlx::query("PRAGMA foreign_keys = ON;")
-        .execute(&pool)
-        .await
-        .unwrap();
-
+    // Foreign keys are automatically enabled on every pooled connection via after_connect
     let eval_id = "eval-fk-test-01";
     sqlx::query(
         r#"
@@ -152,7 +143,6 @@ async fn test_foreign_key_cascading_deletes() {
     .await
     .unwrap();
 
-    // Verify test cases exist
     let before_count: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?")
             .bind(eval_id)
@@ -161,14 +151,12 @@ async fn test_foreign_key_cascading_deletes() {
             .unwrap();
     assert_eq!(before_count.0, 2);
 
-    // Delete parent evaluation
     sqlx::query("DELETE FROM evaluations WHERE id = ?")
         .bind(eval_id)
         .execute(&pool)
         .await
         .unwrap();
 
-    // Verify child test cases were deleted via ON DELETE CASCADE
     let after_count: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM evaluation_test_cases WHERE evaluation_id = ?")
             .bind(eval_id)
@@ -191,7 +179,6 @@ async fn test_transaction_rollback_integrity() {
 
     let mut tx = pool.begin().await.unwrap();
 
-    // Valid insert in transaction
     sqlx::query(
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
@@ -202,7 +189,6 @@ async fn test_transaction_rollback_integrity() {
     .await
     .unwrap();
 
-    // Deliberate error in transaction (violate PK)
     let err_query = sqlx::query(
         r#"
         INSERT INTO models (id, name, framework, task, stage, version)
@@ -213,10 +199,8 @@ async fn test_transaction_rollback_integrity() {
     .await;
     assert!(err_query.is_err());
 
-    // Explicit rollback
     tx.rollback().await.unwrap();
 
-    // Verify row was NOT persisted
     let check: Option<(String,)> = sqlx::query_as("SELECT id FROM models WHERE id = 'm-tx-01'")
         .fetch_optional(&pool)
         .await
@@ -228,4 +212,138 @@ async fn test_transaction_rollback_integrity() {
 
     drop(pool);
     let _ = std::fs::remove_file(&db_path);
+}
+
+#[tokio::test]
+async fn test_sqlite_pragmas_enabled_automatically() {
+    let db_id = Uuid::new_v4().to_string();
+    tokio::fs::create_dir_all("target/tmp/test_dbs").await.ok();
+    let db_path = format!("target/tmp/test_dbs/db_pragma_{}.db", db_id);
+    let db_url = format!("sqlite://{}?mode=rwc", db_path);
+
+    let pool = persistence::init_db(&db_url).await.unwrap();
+
+    let fk_enabled: (i64,) = sqlx::query_as("PRAGMA foreign_keys;")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(fk_enabled.0, 1, "SQLite foreign_keys must default to ON");
+
+    let journal_mode: (String,) = sqlx::query_as("PRAGMA journal_mode;")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        journal_mode.0.to_ascii_lowercase(),
+        "wal",
+        "SQLite journal_mode must default to WAL"
+    );
+
+    drop(pool);
+    let _ = std::fs::remove_file(&db_path);
+    let _ = std::fs::remove_file(format!("{}-wal", db_path));
+    let _ = std::fs::remove_file(format!("{}-shm", db_path));
+}
+
+#[test]
+fn test_postgres_sql_adapter() {
+    assert!(persistence::is_postgres_url(
+        "postgres://user:pass@localhost:5432/llmops"
+    ));
+    assert!(persistence::is_postgres_url(
+        "postgresql://user:pass@localhost/db"
+    ));
+    assert!(!persistence::is_postgres_url(
+        "sqlite://data/llmops.db?mode=rwc"
+    ));
+
+    let raw = "INSERT INTO models (id, name, created_at) VALUES (?, 'foo?', CURRENT_TIMESTAMP)";
+    let adapted = persistence::adapt_sql(raw, true);
+    assert_eq!(
+        adapted,
+        "INSERT INTO models (id, name, created_at) VALUES ($1, 'foo?', to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
+    );
+
+    let ddl = "CREATE TABLE t (a INTEGER, b REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, checked_at TIMESTAMP);";
+    let pg_ddl = persistence::adapt_migration_for_postgres(ddl);
+    assert!(pg_ddl.contains("BIGINT"));
+    assert!(pg_ddl.contains("DOUBLE PRECISION"));
+    assert_eq!(pg_ddl.matches("TEXT NOT NULL DEFAULT to_char").count(), 2);
+    assert!(pg_ddl.contains("checked_at TEXT"));
+}
+
+#[tokio::test]
+async fn test_legacy_sqlite_timestamp_migration() {
+    let db_id = Uuid::new_v4().to_string();
+    tokio::fs::create_dir_all("target/tmp/test_dbs").await.ok();
+    let db_path = format!("target/tmp/test_dbs/db_legacy_ts_{}.db", db_id);
+    let db_url = format!("sqlite://{}?mode=rwc", db_path);
+
+    sqlx::any::install_default_drivers();
+    let legacy_pool = sqlx::any::AnyPoolOptions::new()
+        .max_connections(1)
+        .connect(&db_url)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        CREATE TABLE models (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            framework TEXT NOT NULL,
+            task TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            version TEXT NOT NULL,
+            parameters_count TEXT,
+            artifact_uri TEXT,
+            description TEXT,
+            tags TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+    )
+    .execute(&legacy_pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO models (id, name, framework, task, stage, version, created_at, updated_at)
+        VALUES ('m-legacy-01', 'Legacy Timestamp Model', 'vLLM', 'Text Generation', 'Production', 'v0.1.0', '2025-01-01 00:00:00', '2025-01-01 00:00:00')
+        "#,
+    )
+    .execute(&legacy_pool)
+    .await
+    .unwrap();
+    drop(legacy_pool);
+
+    let migrated_pool = persistence::init_db(&db_url)
+        .await
+        .expect("init_db must transparently migrate legacy TIMESTAMP tables");
+
+    let legacy_row: llmops_backend::domain::Model =
+        sqlx::query_as("SELECT * FROM models WHERE id = 'm-legacy-01'")
+            .fetch_one(&migrated_pool)
+            .await
+            .expect("Migrated legacy TIMESTAMP row must decode cleanly via AnyPool");
+
+    assert_eq!(legacy_row.name, "Legacy Timestamp Model");
+    assert_eq!(legacy_row.created_at, "2025-01-01 00:00:00");
+
+    let models_ddl: (String,) =
+        sqlx::query_as("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'models'")
+            .fetch_one(&migrated_pool)
+            .await
+            .unwrap();
+    assert!(!models_ddl.0.contains("TIMESTAMP NOT NULL"));
+    assert!(models_ddl
+        .0
+        .contains("TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"));
+
+    drop(migrated_pool);
+    let _ = std::fs::remove_file(&db_path);
+    let _ = std::fs::remove_file(format!("{}-wal", db_path));
+    let _ = std::fs::remove_file(format!("{}-shm", db_path));
 }

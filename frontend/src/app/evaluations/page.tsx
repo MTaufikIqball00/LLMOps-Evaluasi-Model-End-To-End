@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -29,20 +29,20 @@ export default function EvaluationsPage() {
     evaluator_framework: "Ragas & TruLens Suite",
   });
 
-  const loadEvaluations = async () => {
+  const loadEvaluations = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchApi<any[]>("/evaluations");
       setEvaluations(data);
-      if (data.length > 0 && !selectedEval) {
-        setSelectedEval(data[0]);
+      if (data.length > 0) {
+        setSelectedEval((prev: any) => prev ?? data[0]);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const loadDetail = async (id: string) => {
     try {
@@ -53,19 +53,19 @@ export default function EvaluationsPage() {
     }
   };
 
-  const loadDefinitions = async () => {
+  const loadDefinitions = useCallback(async () => {
     try {
       const defs = await fetchApi<any[]>("/evaluations/metrics/definitions");
       setDefinitions(defs);
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadEvaluations();
     loadDefinitions();
-  }, []);
+  }, [loadEvaluations, loadDefinitions]);
 
   useEffect(() => {
     if (selectedEval) {
@@ -238,7 +238,7 @@ export default function EvaluationsPage() {
 
           <div className="space-y-4">
             {detailData.test_cases?.map((tc: any, idx: number) => {
-              const isHallucinated = tc.hallucination_detected === 1;
+              const isHallucinated = tc.hallucination_detected === 1 || tc.hallucination_detected === true;
 
               return (
                 <div

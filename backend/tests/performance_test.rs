@@ -21,17 +21,7 @@ impl PerfTestApp {
 
         let pool = persistence::init_db(&database_url).await.unwrap();
 
-        let state = Arc::new(api::health::AppState {
-            pool: pool.clone(),
-            start_time: Instant::now(),
-            server_port: 0,
-            frontend_origin: "http://localhost:3210".to_string(),
-            mlflow_url: "http://localhost:5500".to_string(),
-            prometheus_url: "http://localhost:9190".to_string(),
-            grafana_url: "http://localhost:3310".to_string(),
-            github_repo: "enterprise/llmops-platform".to_string(),
-            github_token: None,
-        });
+        let state = Arc::new(api::health::AppState::for_test(pool.clone()));
 
         let app = api::build_router(state);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
