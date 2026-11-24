@@ -277,6 +277,7 @@ Semua endpoint bisnis berada di bawah prefix `/api/v1/*`. Dokumentasi interaktif
 | `GET` / `POST` | `/api/v1/traces` | Riwayat / ingest trace + kalkulasi biaya atomik | `?model=...&provider=...&status=200` |
 | `POST` | `/api/v1/gateway/chat/completions` | AI Gateway OpenAI-compatible + auto trace/cost | `{"model": "gpt-4o", "messages": [...]}` |
 | `GET` | `/api/v1/costs/summary` | Ringkasan biaya & proyeksi bulanan | - |
+| `GET` | `/api/v1/costs/comparison` | Perbandingan efisiensi token Sebelum (Baseline) vs Sesudah (LLMOps Control Guard) | `?source=auto\|database\|transcripts` |
 | `GET` | `/api/v1/costs/pricing` | Katalog tarif token per model/provider | - |
 | `PATCH` | `/api/v1/costs/budget` | Perbarui batas anggaran & threshold alert | `{"monthly_budget_usd": 3000, "alert_threshold_pct": 80}` |
 | `GET` / `POST` | `/api/v1/alerts/rules` | Daftar & buat rule alerting SLA | `metric_type`, `operator`, `threshold` |

@@ -1,12 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import { MetricCard } from "@/components/MetricCard";
-import { Coins, AlertTriangle, ShieldCheck, DollarSign, TrendingUp, Sliders } from "lucide-react";
+import {
+  Coins,
+  ShieldCheck,
+  DollarSign,
+  TrendingUp,
+  Sliders,
+  GitCompare,
+  ArrowDownRight,
+  ArrowUpRight,
+  RefreshCw,
+} from "lucide-react";
 
 export default function CostsPage() {
   const [summary, setSummary] = useState<any>(null);
+  const [comparison, setComparison] = useState<any>(null);
   const [pricing, setPricing] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
@@ -15,15 +26,17 @@ export default function CostsPage() {
     alert_threshold_pct: 80,
   });
 
-  const loadCosts = async () => {
+  const loadCosts = useCallback(async () => {
     try {
       setLoading(true);
-      const [sum, price] = await Promise.all([
+      const [sum, price, comp] = await Promise.all([
         fetchApi<any>("/costs/summary"),
         fetchApi<any[]>("/costs/pricing"),
+        fetchApi<any>("/costs/comparison").catch(() => null),
       ]);
       setSummary(sum);
       setPricing(price);
+      setComparison(comp);
       if (sum?.budget) {
         setBudgetForm({
           monthly_budget_usd: sum.budget.monthly_budget_usd,
@@ -35,11 +48,11 @@ export default function CostsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadCosts();
-  }, []);
+  }, [loadCosts]);
 
   const handleUpdateBudget = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,6 +176,200 @@ export default function CostsPage() {
           source="Forecast Model"
         />
       </div>
+
+      {/* Before vs After Token Efficiency Comparison Panel */}
+      {comparison && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <GitCompare className="w-4 h-4 text-cyan-400" />
+                Token Efficiency Comparison: Tanpa Program vs Dengan LLMOps Control Guard
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Sumber data: <span className="text-slate-300 font-medium">{comparison.data_source}</span>
+                {comparison.cutoff_timestamp && (
+                  <>
+                    {" "}• Cutoff aktif:{" "}
+                    <span className="font-mono text-slate-300">
+                      {new Date(comparison.cutoff_timestamp).toLocaleString()}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadCosts}
+              disabled={loading}
+              className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs transition"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${loading ? "animate-spin" : ""}`} />
+              Refresh Comparison
+            </button>
+          </div>
+
+          {/* Side-by-Side Cohort Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Baseline (Without Program) */}
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-200">
+                  {comparison.without_program?.label || "Tanpa Program (Baseline)"}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                  {comparison.without_program?.sessions_count || 0} sesi •{" "}
+                  {comparison.without_program?.turns_count || 0} giliran
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase">Total Token</div>
+                  <div className="text-base font-mono font-bold text-white">
+                    {(comparison.without_program?.total_tokens || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase">Rata-rata / Giliran</div>
+                  <div className="text-base font-mono font-bold text-slate-200">
+                    {Math.round(comparison.without_program?.avg_tokens_per_turn || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase">Rata-rata Output / Giliran</div>
+                  <div className="text-sm font-mono font-semibold text-amber-300">
+                    {Math.round(comparison.without_program?.avg_output_tokens_per_turn || 0).toLocaleString()} tok
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase">Estimasi Biaya</div>
+                  <div className="text-sm font-mono font-semibold text-slate-300">
+                    ${(comparison.without_program?.estimated_cost_usd || 0).toFixed(4)}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-800/70">
+                Input: {(comparison.without_program?.prompt_tokens || 0).toLocaleString()} • Output:{" "}
+                {(comparison.without_program?.completion_tokens || 0).toLocaleString()} • Cache:{" "}
+                {(comparison.without_program?.cache_read_tokens || 0).toLocaleString()}
+              </div>
+            </div>
+
+            {/* Guarded (With Program) */}
+            <div className="rounded-lg border border-indigo-900/60 bg-indigo-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-indigo-200">
+                  {comparison.with_program?.label || "Dengan LLMOps Control Guard"}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-200 font-mono">
+                  {comparison.with_program?.sessions_count || 0} sesi •{" "}
+                  {comparison.with_program?.turns_count || 0} giliran
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Total Token</div>
+                  <div className="text-base font-mono font-bold text-white">
+                    {(comparison.with_program?.total_tokens || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Rata-rata / Giliran</div>
+                  <div className="text-base font-mono font-bold text-cyan-300">
+                    {Math.round(comparison.with_program?.avg_tokens_per_turn || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Rata-rata Output / Giliran</div>
+                  <div className="text-sm font-mono font-semibold text-emerald-400">
+                    {Math.round(comparison.with_program?.avg_output_tokens_per_turn || 0).toLocaleString()} tok
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Estimasi Biaya</div>
+                  <div className="text-sm font-mono font-semibold text-emerald-300">
+                    ${(comparison.with_program?.estimated_cost_usd || 0).toFixed(4)}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono pt-1 border-t border-indigo-900/40">
+                Input: {(comparison.with_program?.prompt_tokens || 0).toLocaleString()} • Output:{" "}
+                {(comparison.with_program?.completion_tokens || 0).toLocaleString()} • Cache:{" "}
+                {(comparison.with_program?.cache_read_tokens || 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Delta Summary Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-slate-400 uppercase">Efisiensi Output Token / Giliran</div>
+                <div className="text-slate-300 mt-0.5 font-mono">
+                  {comparison.avg_output_tokens_saved_per_turn >= 0 ? "Hemat " : "Selisih +"}
+                  {Math.abs(Math.round(comparison.avg_output_tokens_saved_per_turn || 0)).toLocaleString()} tok/giliran
+                </div>
+              </div>
+              {comparison.output_token_delta_pct !== null && comparison.output_token_delta_pct !== undefined ? (
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono font-semibold ${
+                    comparison.output_token_delta_pct >= 0
+                      ? "bg-emerald-950/70 text-emerald-400 border border-emerald-800/60"
+                      : "bg-amber-950/70 text-amber-300 border border-amber-800/60"
+                  }`}
+                >
+                  {comparison.output_token_delta_pct >= 0 ? (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  )}
+                  {comparison.output_token_delta_pct >= 0
+                    ? `-${comparison.output_token_delta_pct}%`
+                    : `+${Math.abs(comparison.output_token_delta_pct)}%`}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-500 font-mono">Menunggu data</span>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-slate-400 uppercase">Efisiensi Total Token / Giliran</div>
+                <div className="text-slate-300 mt-0.5 font-mono">
+                  {comparison.avg_tokens_saved_per_turn >= 0 ? "Hemat " : "Selisih +"}
+                  {Math.abs(Math.round(comparison.avg_tokens_saved_per_turn || 0)).toLocaleString()} tok/giliran
+                </div>
+              </div>
+              {comparison.total_token_delta_pct !== null && comparison.total_token_delta_pct !== undefined ? (
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono font-semibold ${
+                    comparison.total_token_delta_pct >= 0
+                      ? "bg-emerald-950/70 text-emerald-400 border border-emerald-800/60"
+                      : "bg-amber-950/70 text-amber-300 border border-amber-800/60"
+                  }`}
+                >
+                  {comparison.total_token_delta_pct >= 0 ? (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  )}
+                  {comparison.total_token_delta_pct >= 0
+                    ? `-${comparison.total_token_delta_pct}%`
+                    : `+${Math.abs(comparison.total_token_delta_pct)}%`}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-500 font-mono">Menunggu data</span>
+              )}
+            </div>
+          </div>
+
+          {comparison.comparison_note && (
+            <div className="text-[11px] text-slate-400 bg-slate-950/40 border border-slate-800/70 rounded-lg px-3 py-2">
+              {comparison.comparison_note}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Provider Breakdown & Model Breakdown Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

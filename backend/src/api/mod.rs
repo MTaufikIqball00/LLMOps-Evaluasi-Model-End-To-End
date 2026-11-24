@@ -107,6 +107,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/alerts/evaluate", post(alerts::evaluate_alerts_now))
         // Costs & Pricing
         .route("/costs/summary", get(costs::get_cost_summary))
+        .route("/costs/comparison", get(costs::get_token_comparison))
         .route("/costs/pricing", get(costs::list_pricing_catalog))
         .route("/costs/budget", patch(costs::update_budget))
         // Deployments

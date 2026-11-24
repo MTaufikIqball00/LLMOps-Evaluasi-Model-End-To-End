@@ -80,6 +80,10 @@ pub async fn get_openapi_spec() -> Json<Value> {
         json!({ "get": { "summary": "Spend, Pricing Breakdown & Budget Projection", "responses": { "200": { "description": "Cost summary" } } } }),
     );
     paths.insert(
+        "/costs/comparison".to_string(),
+        json!({ "get": { "summary": "Before vs After Token Efficiency Comparison (Baseline vs LLMOps Guard)", "responses": { "200": { "description": "Token cohort comparison report" } } } }),
+    );
+    paths.insert(
         "/costs/pricing".to_string(),
         json!({ "get": { "summary": "Provider Pricing Catalog", "responses": { "200": { "description": "Pricing catalog" } } } }),
     );

@@ -1,0 +1,5 @@
+{
+  "name": "llmops-control-guard",
+  "author": "LLMOps Control Center",
+  "description": "Mode 1 Antigravity integration for LLMOps Control Center: token-saving & anti-hallucination rules, local Node.js secret-leak PreToolUse guard, and detached Stop telemetry to localhost:8210."
+}

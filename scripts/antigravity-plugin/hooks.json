@@ -1,0 +1,27 @@
+{
+  "llmops-pre-tool-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/pre_tool_guard.mjs",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "llmops-stop-telemetry": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/stop_telemetry.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}

@@ -1096,6 +1096,96 @@ export function handleCloudApiRequest(endpoint: string, options?: RequestInit): 
     };
   }
 
+  if (pathname === "/costs/comparison" && method === "GET") {
+    const traces = state.traces || [];
+    let beforeTurns = 0, beforePrompt = 0, beforeComp = 0, beforeCost = 0;
+    let afterTurns = 0, afterPrompt = 0, afterComp = 0, afterCost = 0;
+
+    for (const tr of traces) {
+      let guarded = false;
+      try {
+        const meta = typeof tr.metadata === "string" ? JSON.parse(tr.metadata) : tr.metadata;
+        guarded = Boolean(
+          meta?.llmops_guard ||
+            meta?.guard_mode === "mode1" ||
+            meta?.guard_mode === "mode2" ||
+            meta?.source === "antigravity_hook"
+        );
+      } catch {
+        guarded = false;
+      }
+      if (guarded) {
+        afterTurns++;
+        afterPrompt += tr.prompt_tokens || 0;
+        afterComp += tr.completion_tokens || 0;
+        afterCost += tr.estimated_cost || 0;
+      } else {
+        beforeTurns++;
+        beforePrompt += tr.prompt_tokens || 0;
+        beforeComp += tr.completion_tokens || 0;
+        beforeCost += tr.estimated_cost || 0;
+      }
+    }
+
+    const useDemoAfter = afterTurns === 0;
+    const withoutStats = {
+      label: "Tanpa Program (Baseline)",
+      sessions_count: useDemoAfter ? 12 : Math.max(1, beforeTurns),
+      turns_count: useDemoAfter ? 120 : beforeTurns,
+      prompt_tokens: useDemoAfter ? 6840000 : beforePrompt,
+      completion_tokens: useDemoAfter ? 672000 : beforeComp,
+      cache_read_tokens: useDemoAfter ? 18500000 : 0,
+      total_tokens: useDemoAfter ? 7512000 : beforePrompt + beforeComp,
+      avg_tokens_per_turn: useDemoAfter ? 62600 : beforeTurns ? Math.round(((beforePrompt + beforeComp) / beforeTurns) * 10) / 10 : 0,
+      avg_prompt_tokens_per_turn: useDemoAfter ? 57000 : beforeTurns ? Math.round((beforePrompt / beforeTurns) * 10) / 10 : 0,
+      avg_output_tokens_per_turn: useDemoAfter ? 5600 : beforeTurns ? Math.round((beforeComp / beforeTurns) * 10) / 10 : 0,
+      estimated_cost_usd: useDemoAfter ? 11.91 : Math.round(beforeCost * 10000) / 10000,
+    };
+
+    const withStats = {
+      label: "Dengan LLMOps Control Guard",
+      sessions_count: useDemoAfter ? 5 : 1,
+      turns_count: useDemoAfter ? 48 : afterTurns,
+      prompt_tokens: useDemoAfter ? 1728000 : afterPrompt,
+      completion_tokens: useDemoAfter ? 115200 : afterComp,
+      cache_read_tokens: useDemoAfter ? 9600000 : 0,
+      total_tokens: useDemoAfter ? 1843200 : afterPrompt + afterComp,
+      avg_tokens_per_turn: useDemoAfter ? 38400 : afterTurns ? Math.round(((afterPrompt + afterComp) / afterTurns) * 10) / 10 : 0,
+      avg_prompt_tokens_per_turn: useDemoAfter ? 36000 : afterTurns ? Math.round((afterPrompt / afterTurns) * 10) / 10 : 0,
+      avg_output_tokens_per_turn: useDemoAfter ? 2400 : afterTurns ? Math.round((afterComp / afterTurns) * 10) / 10 : 0,
+      estimated_cost_usd: useDemoAfter ? 2.736 : Math.round(afterCost * 10000) / 10000,
+    };
+
+    const totalDeltaPct =
+      withoutStats.avg_tokens_per_turn > 0
+        ? Math.round(((withoutStats.avg_tokens_per_turn - withStats.avg_tokens_per_turn) / withoutStats.avg_tokens_per_turn) * 1000) / 10
+        : null;
+    const outputDeltaPct =
+      withoutStats.avg_output_tokens_per_turn > 0
+        ? Math.round(((withoutStats.avg_output_tokens_per_turn - withStats.avg_output_tokens_per_turn) / withoutStats.avg_output_tokens_per_turn) * 1000) / 10
+        : null;
+    const avgSaved = Math.round((withoutStats.avg_tokens_per_turn - withStats.avg_tokens_per_turn) * 10) / 10;
+    const avgOutSaved = Math.round((withoutStats.avg_output_tokens_per_turn - withStats.avg_output_tokens_per_turn) * 10) / 10;
+
+    return {
+      without_program: withoutStats,
+      with_program: withStats,
+      total_token_delta_pct: totalDeltaPct,
+      output_token_delta_pct: outputDeltaPct,
+      avg_tokens_saved_per_turn: avgSaved,
+      avg_output_tokens_saved_per_turn: avgOutSaved,
+      projected_tokens_saved: Math.round(avgSaved * withStats.turns_count),
+      projected_cost_saved_usd: useDemoAfter ? 2.028 : 0,
+      cutoff_timestamp: nowIso(),
+      data_source: useDemoAfter
+        ? "Cloud Fallback Mode (Representative Demo Cohort)"
+        : "Cloud Fallback Mode (Live Guarded Traces)",
+      comparison_note: useDemoAfter
+        ? "Menampilkan simulasi perbandingan kohort pada Vercel Cloud Fallback Mode. Jalankan backend Rust lokal (:8210) untuk memindai riwayat transcript Antigravity nyata."
+        : "Perbandingan dihitung dari trace baseline vs trace bertanda LLMOps Control Guard.",
+    };
+  }
+
   if (pathname === "/costs/pricing" && method === "GET") {
     return state.pricing;
   }

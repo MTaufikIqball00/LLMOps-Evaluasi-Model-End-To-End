@@ -849,6 +849,7 @@ async fn test_openapi_and_swagger_endpoints() {
     assert!(spec["paths"]["/prompts"].is_object());
     assert!(spec["paths"]["/alerts/rules"].is_object());
     assert!(spec["paths"]["/gateway/chat/completions"].is_object());
+    assert!(spec["paths"]["/costs/comparison"].is_object());
 
     let docs_res = client
         .get(format!("{}/api/v1/docs", app.base_url))
@@ -858,4 +859,97 @@ async fn test_openapi_and_swagger_endpoints() {
     assert_eq!(docs_res.status(), StatusCode::OK);
     let html = docs_res.text().await.unwrap();
     assert!(html.contains("SwaggerUIBundle"));
+}
+
+#[tokio::test]
+async fn test_costs_token_comparison_endpoint() {
+    let app = TestApp::spawn().await;
+    let client = reqwest::Client::new();
+
+    // Seed a guarded Antigravity trace into the isolated test database
+    let res_trace = client
+        .post(format!("{}/api/v1/traces", app.base_url))
+        .json(&json!({
+            "span_name": "antigravity::turn",
+            "model_name": "gemini-1.5-pro",
+            "provider": "google_antigravity",
+            "status_code": 200,
+            "latency_ms": 420.0,
+            "prompt_tokens": 300,
+            "completion_tokens": 80,
+            "prompt": "Ringkas struktur proyek",
+            "completion": "Struktur proyek terdiri dari backend Rust dan frontend Next.js.",
+            "metadata": {
+                "source": "antigravity_hook",
+                "llmops_guard": true,
+                "guard_mode": "mode1",
+                "cache_read_tokens": 1200
+            },
+            "error_message": null
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res_trace.status(), StatusCode::OK);
+
+    // 1. Verify database cohort comparison endpoint
+    let db_comp: Value = client
+        .get(format!(
+            "{}/api/v1/costs/comparison?source=database",
+            app.base_url
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(db_comp["without_program"]["turns_count"].as_i64().unwrap() >= 1);
+    assert_eq!(db_comp["with_program"]["turns_count"].as_i64().unwrap(), 1);
+    assert_eq!(
+        db_comp["with_program"]["total_tokens"].as_i64().unwrap(),
+        380
+    );
+    assert_eq!(
+        db_comp["with_program"]["cache_read_tokens"]
+            .as_i64()
+            .unwrap(),
+        1200
+    );
+    assert!(db_comp["total_token_delta_pct"].is_number());
+
+    // 2. Verify local transcript scanner splits before vs after cutoff cleanly
+    let tmp_root = std::path::PathBuf::from(format!(
+        "target/tmp/test_transcripts_{}",
+        uuid::Uuid::new_v4()
+    ));
+    let log_dir = tmp_root
+        .join("conv-01")
+        .join(".system_generated")
+        .join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let sample_jsonl = concat!(
+        "\u{feff}{\"type\":\"USER_INPUT\",\"created_at\":\"2026-11-20T10:00:00Z\",\"content\":\"Old turn\"}\n",
+        "{\"type\":\"PLANNER_RESPONSE\",\"created_at\":\"2026-11-20T10:00:05Z\",\"input_tokens\":4000,\"output_tokens\":1000,\"cache_read_tokens\":500}\n",
+        "{\"type\":\"USER_INPUT\",\"created_at\":\"2026-11-25T10:00:00Z\",\"content\":\"New guarded turn\"}\n",
+        "{\"type\":\"PLANNER_RESPONSE\",\"created_at\":\"2026-11-25T10:00:02Z\",\"input_tokens\":1500,\"output_tokens\":300,\"cache_read_tokens\":2000}\n"
+    );
+    std::fs::write(log_dir.join("transcript.jsonl"), sample_jsonl).unwrap();
+
+    let cutoff_ms = chrono::DateTime::parse_from_rfc3339("2026-11-24T00:00:00Z")
+        .unwrap()
+        .timestamp_millis();
+    let report = llmops_backend::api::costs::compute_transcript_comparison(
+        &tmp_root, cutoff_ms, 0.00125, 0.005,
+    )
+    .expect("transcript comparison must succeed on valid sample");
+
+    assert_eq!(report.without_program.turns_count, 1);
+    assert_eq!(report.without_program.total_tokens, 5000);
+    assert_eq!(report.with_program.turns_count, 1);
+    assert_eq!(report.with_program.total_tokens, 1800);
+    assert_eq!(report.total_token_delta_pct, Some(64.0));
+    assert_eq!(report.output_token_delta_pct, Some(70.0));
+
+    let _ = std::fs::remove_dir_all(&tmp_root);
 }
